@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "hevilking的浏览器主页",
+  "version": "1.0.0",
+  "description": "一个极简的浏览器主页扩展，支持搜索引擎切换、快捷方式和壁纸切换",
+  "permissions": [
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "chrome_url_overrides": {
+    "newtab": "index.html"
+  },
+  "icons": {
+    "16": "assets/images/icon.jpg",
+    "48": "assets/images/icon.jpg",
+    "128": "assets/images/icon.jpg"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
