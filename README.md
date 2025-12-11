@@ -18,15 +18,11 @@
 - **自动回退**：在线壁纸获取失败时自动使用本地壁纸
 - **多种壁纸源**：集成Picsum随机图片API和本地壁纸
 
-### 浏览器扩展功能
-- **Chrome/Edge扩展**：可作为浏览器新标签页扩展使用
-- **一键安装**：支持开发者模式快速安装
-
 ## 项目结构
 
 ### 基础版本
 ```
-BrowserHome/
+hevilking'sBrowserHome/
 ├── index.html              # 主页面文件
 ├── css/
 │   ├── style.css           # 主样式文件
@@ -44,14 +40,8 @@ BrowserHome/
 BrowserHome/
 ├── manifest.json           # 扩展配置文件
 ├── background.js           # 后台脚本
-├── README_EXTENSION.md     # 扩展安装说明
 └── (其他基础版本文件)
 ```
-
-## 使用方法
-
-### 作为浏览器扩展使用
-详细安装和使用说明请参考 [README_EXTENSION.md](README_EXTENSION.md) 文件
 
 **快速安装步骤：**
 1. 打开Chrome或Edge浏览器
@@ -75,13 +65,15 @@ BrowserHome/
 
 ## 注意事项
 
-### 基础版本
+### 基础
 - 本地壁纸文件存放在 `assets/images/` 文件夹中，可以添加或删除壁纸文件
 - 快捷方式数据存储在浏览器的localStorage中，清除浏览器数据会丢失快捷方式
 - 在线壁纸功能需要网络连接，如果网络不可用会自动切换到本地壁纸
 
-### 浏览器扩展版本
-- 扩展安装需要开启开发者模式
-- 扩展更新后需要重新加载扩展
-- 扩展功能受浏览器安全策略限制，部分外部资源可能无法加载
-- 详细故障排除请参考 [README_EXTENSION.md](README_EXTENSION.md)
+## 更新日志
+
+### 1.0.0
+
+插件已达到个人使用目标，核心功能稳定。
+
+目前无进一步开发计划，但欢迎社区 Fork 并按需定制。
