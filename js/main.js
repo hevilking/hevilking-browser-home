@@ -457,7 +457,7 @@ function createShortcutElement(shortcut, index) {
     const icon = document.createElement('div');
     icon.className = 'shortcut-icon';
     
-    // 获取域名和对应的图标
+    // 获取域名
     let domain = '';
     try {
         domain = new URL(shortcut.url).hostname.toLowerCase();
@@ -465,9 +465,14 @@ function createShortcutElement(shortcut, index) {
         // 忽略错误，使用空域名
     }
     
-    // 获取对应的图标，如果没有则使用默认图标
-    const iconChar = siteIcons[domain] || '🌐';
-    icon.innerHTML = `<span style="font-size:24px;">${iconChar}</span>`;
+    // 如果无法获取域名，使用默认图标
+    if (!domain) {
+        const iconChar = '🌐';
+        icon.innerHTML = `<span style="font-size:24px;">${iconChar}</span>`;
+    } else {
+        // 使用 favicon API 获取网站图标，支持多个服务备选
+        loadFavicon(icon, domain, shortcut.name);
+    }
     
     const name = document.createElement('div');
     name.className = 'shortcut-name';
@@ -511,6 +516,76 @@ function createShortcutElement(shortcut, index) {
     });
     
     return div;
+}
+
+// 加载 favicon，支持多个服务备选
+function loadFavicon(iconElement, domain, name) {
+    // 定义多个 favicon 服务源（按国内访问速度排序）
+    const faviconSources = [
+        // 方法1: 直接从网站根目录获取（最快，国内网站）
+        `https://${domain}/favicon.ico`,
+        // 方法2: DuckDuckGo Favicon API（国内访问较快）
+        `https://icons.duckduckgo.com/ip3/${domain}.ico`,
+        // 方法3: Favicon Kit（国内 CDN 加速）
+        `https://cdn.favkit.com/${domain}/icon?size=64`,
+        // 方法4: GetFavicon（国内访问较快）
+        `https://www.getfavicon.org/?url=https://${domain}&size=64&format=png`,
+        // 方法5: Google Favicon API（可能较慢）
+        `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
+        // 方法6: Favicon Grabber（备选）
+        `https://www.favicongrabber.com/api/grab/${domain}?size=64&fallback=true`
+    ];
+    
+    let currentSourceIndex = 0;
+    
+    // 创建图片元素
+    const img = document.createElement('img');
+    img.alt = name;
+    img.style.width = '32px';
+    img.style.height = '32px';
+    img.style.objectFit = 'contain';
+    img.style.display = 'none';
+    
+    // 尝试加载下一个 favicon 源
+    function tryNextSource() {
+        if (currentSourceIndex >= faviconSources.length) {
+            // 所有源都失败了，使用 emoji 回退
+            const iconChar = siteIcons[domain] || '🌐';
+            iconElement.innerHTML = `<span style="font-size:24px;">${iconChar}</span>`;
+            return;
+        }
+        
+        const src = faviconSources[currentSourceIndex];
+        img.src = src;
+        
+        // 设置超时，如果 3 秒内没有加载完成，尝试下一个源
+        const timeout = setTimeout(() => {
+            currentSourceIndex++;
+            tryNextSource();
+        }, 3000);
+        
+        img.onload = function() {
+            clearTimeout(timeout);
+            // 检查图片是否有效（不是 0x0 或 1x1 的占位图）
+            if (img.naturalWidth > 1 && img.naturalHeight > 1) {
+                img.style.display = 'block';
+                iconElement.innerHTML = '';
+                iconElement.appendChild(img);
+            } else {
+                currentSourceIndex++;
+                tryNextSource();
+            }
+        };
+        
+        img.onerror = function() {
+            clearTimeout(timeout);
+            currentSourceIndex++;
+            tryNextSource();
+        };
+    }
+    
+    // 开始尝试加载
+    tryNextSource();
 }
 
 // 添加快捷方式
