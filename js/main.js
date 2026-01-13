@@ -520,20 +520,8 @@ function createShortcutElement(shortcut, index) {
 
 // 加载 favicon，支持多个服务备选
 function loadFavicon(iconElement, domain, name) {
-    // 定义多个 favicon 服务源（按国内访问速度排序）
     const faviconSources = [
-        // 方法1: 直接从网站根目录获取（最快，国内网站）
         `https://${domain}/favicon.ico`,
-        // 方法2: DuckDuckGo Favicon API（国内访问较快）
-        `https://icons.duckduckgo.com/ip3/${domain}.ico`,
-        // 方法3: Favicon Kit（国内 CDN 加速）
-        `https://cdn.favkit.com/${domain}/icon?size=64`,
-        // 方法4: GetFavicon（国内访问较快）
-        `https://www.getfavicon.org/?url=https://${domain}&size=64&format=png`,
-        // 方法5: Google Favicon API（可能较慢）
-        `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
-        // 方法6: Favicon Grabber（备选）
-        `https://www.favicongrabber.com/api/grab/${domain}?size=64&fallback=true`
     ];
     
     let currentSourceIndex = 0;
