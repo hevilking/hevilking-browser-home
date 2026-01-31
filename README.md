@@ -26,10 +26,10 @@ hevilking'sBrowserHome/
 ├── index.html              # 主页面文件
 ├── css/
 │   ├── style.css           # 主样式文件
-│   └── immersive-search.css # 沉浸式搜索样式
+│   └── immersive-search.css # 沉浸式搜索样式(弃)
 ├── js/
 │   ├── main.js             # 主JavaScript逻辑
-│   └── immersive-search.js # 沉浸式搜索功能
+│   └── immersive-search.js # 沉浸式搜索功能(弃)
 ├── assets/
 │   └── images/             # 壁纸和图标文件夹
 └── README.md               # 项目说明文档
@@ -54,14 +54,9 @@ BrowserHome/
 ## 技术实现
 
 ### 前端技术
-- **HTML5**：页面结构
-- **CSS3**：样式设计，使用Flexbox和Grid布局，backdrop-filter实现毛玻璃效果
-- **原生JavaScript**：交互逻辑，使用localStorage存储快捷方式数据
-
-### 浏览器扩展技术
-- **Manifest V3**：现代浏览器扩展标准
-- **Service Worker**：后台脚本管理
-- **Content Security Policy**：安全策略适配
+- **HTML5**
+- **CSS3**
+- **原生JavaScript**
 
 ## 注意事项
 
