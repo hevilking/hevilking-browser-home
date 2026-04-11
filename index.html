@@ -5,11 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>让我们开始吧</title>
     <link rel="stylesheet" href="css/style.css">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://api.bing.com https://www.bing.com https://suggestqueries.google.com https://www.baidu.com https://suggestion.baidu.com https://duckduckgo.com;">
 </head>
 <body>
-    <!-- 背景图片 -->
-    <div class="background" id="background"></div>
+    <!-- 背景系统 -->
+    <div class="background-system" id="backgroundSystem">
+        <div class="background-layer" id="backgroundLayerA"></div>
+        <div class="background-layer" id="backgroundLayerB"></div>
+        <div class="background-overlay" id="backgroundOverlay"></div>
+    </div>
     
     <!-- 主容器 -->
     <div class="container">
@@ -22,6 +26,12 @@
                     <polyline points="21 15 16 10 5 21"></polyline>
                 </svg>
             </div>
+            <button class="wallpaper-settings-btn" id="wallpaperSettingsBtn" type="button" title="背景设置">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.33 1V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-.33-1 1.65 1.65 0 0 0-1-.6 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1-.33H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1-.33 1.65 1.65 0 0 0 .6-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6 1.65 1.65 0 0 0 .33-1V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 .33 1 1.65 1.65 0 0 0 1 .6 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.24.3.44.64.6 1 .12.33.18.68.18 1.03s-.06.7-.18 1.03c-.16.36-.36.7-.6 1z"></path>
+                </svg>
+            </button>
         </div>
         
         <!-- 搜索区域 -->
@@ -51,10 +61,6 @@
                         <input type="checkbox" id="searchHistorySwitch" class="search-history-switch">
                         <label for="searchHistorySwitch" class="toggle-label">
                             <span class="toggle-slider"></span>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-                                <path d="M3 3v5h5"></path>
-                            </svg>
                         </label>
                     </div>
                     <!-- 搜索历史记录下拉框 -->
@@ -65,6 +71,15 @@
                         </div>
                         <div class="search-history-list" id="searchHistoryList">
                             <!-- 搜索历史记录将通过JavaScript动态添加 -->
+                        </div>
+                    </div>
+                    <!-- 联想搜索下拉框 -->
+                    <div class="search-suggestions-dropdown" id="searchSuggestionsDropdown">
+                        <div class="search-suggestions-header">
+                            <h4>联想搜索</h4>
+                        </div>
+                        <div class="search-suggestions-list" id="searchSuggestionsList">
+                            <!-- 联想词将通过JavaScript动态添加 -->
                         </div>
                     </div>
                 </div>
@@ -83,12 +98,25 @@
             <div class="shortcuts-header">
                 <h3>快捷方式</h3>
                 <div class="header-actions">
-                    <div class="drag-hint" title="拖拽快捷方式可以重新排序">
+                    <button class="shortcut-action-btn drag-hint" id="dragHintBtn" type="button" aria-label="拖拽提示">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="8 6 2 12 8 18"></polyline>
                             <polyline points="16 6 22 12 16 18"></polyline>
                         </svg>
-                    </div>
+                    </button>
+                    <button class="shortcut-action-btn" id="copyShortcutMetaBtn" type="button" aria-label="复制快捷方式元数据" title="复制快捷方式元数据">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                    </button>
+                    <button class="shortcut-action-btn" id="importShortcutMetaBtn" type="button" aria-label="导入快捷方式元数据" title="导入快捷方式元数据">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                    </button>
                     <button class="add-shortcut-btn" id="addShortcutBtn">+</button>
                 </div>
             </div>
@@ -103,7 +131,12 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h2 id="modalTitle">添加快捷方式</h2>
-                    <span class="close" id="closeModal">&times;</span>
+                    <button class="close-btn" id="closeModal" type="button" aria-label="关闭弹窗">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
                 </div>
                 <div class="modal-body">
                     <form id="shortcutForm">
@@ -121,6 +154,85 @@
             </div>
         </div>
     </div>
+
+    <!-- 背景设置面板 -->
+    <aside class="bg-settings-panel" id="bgSettingsPanel" aria-hidden="true">
+        <div class="bg-settings-header">
+            <h3>背景设置</h3>
+            <button class="bg-settings-close" id="bgSettingsClose" type="button" aria-label="关闭背景设置">×</button>
+        </div>
+        <div class="bg-settings-body">
+            <div class="bg-settings-item">
+                <label for="bgModeSelect">背景模式</label>
+                <select id="bgModeSelect">
+                    <option value="mixed">混合（本地+在线）</option>
+                    <option value="local">仅本地</option>
+                    <option value="online">仅在线</option>
+                    <option value="gradient">渐变</option>
+                    <option value="solid">纯色</option>
+                </select>
+            </div>
+            <div class="bg-settings-item">
+                <label for="bgAutoRotate">自动轮播</label>
+                <div class="bg-auto-rotate-toggle">
+                    <input type="checkbox" id="bgAutoRotate" class="search-history-switch">
+                    <label for="bgAutoRotate" class="toggle-label">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="bg-settings-item">
+                <label for="bgRotateInterval">轮播间隔（秒）<span id="bgRotateIntervalValue"></span></label>
+                <input type="range" id="bgRotateInterval" min="10" max="1800" step="10">
+            </div>
+            <div class="bg-settings-item">
+                <label for="bgOverlayOpacity">遮罩强度（%）<span id="bgOverlayOpacityValue"></span></label>
+                <input type="range" id="bgOverlayOpacity" min="0" max="70" step="1">
+            </div>
+            <div class="bg-settings-item">
+                <label for="bgUiGlassBlur">界面毛玻璃强度（px）<span id="bgUiGlassBlurValue"></span></label>
+                <input type="range" id="bgUiGlassBlur" min="0" max="30" step="1">
+            </div>
+            <div class="bg-settings-item">
+                <label for="bgBlur">模糊（px）<span id="bgBlurValue"></span></label>
+                <input type="range" id="bgBlur" min="0" max="20" step="1">
+            </div>
+            <div class="bg-settings-item">
+                <label for="bgBrightness">亮度（%）<span id="bgBrightnessValue"></span></label>
+                <input type="range" id="bgBrightness" min="60" max="140" step="1">
+            </div>
+            <div class="bg-settings-item">
+                <label for="bgSaturate">饱和度（%）<span id="bgSaturateValue"></span></label>
+                <input type="range" id="bgSaturate" min="50" max="180" step="1">
+            </div>
+            <div class="bg-settings-item">
+                <label for="bgContrast">对比度（%）<span id="bgContrastValue"></span></label>
+                <input type="range" id="bgContrast" min="50" max="150" step="1">
+            </div>
+            <div class="bg-settings-item" id="bgSolidColorRow">
+                <label for="bgSolidColor">纯色值</label>
+                <input type="color" id="bgSolidColor">
+            </div>
+            <div class="bg-settings-item">
+                <label for="bgUploadInput">上传本地背景（仅本地保存）</label>
+                <input type="file" id="bgUploadInput" accept="image/*">
+                <small id="bgUploadHint">单图上限 8MB，总上限 80MB，最多 30 张。</small>
+            </div>
+            <div class="bg-settings-item">
+                <label>已上传背景</label>
+                <div class="bg-uploaded-list" id="bgUploadedList"></div>
+            </div>
+            <div class="bg-settings-actions">
+                <button type="button" id="bgResetBtn" class="bg-reset-btn">恢复默认设置</button>
+                <button type="button" id="bgApplyBtn">应用设置</button>
+            </div>
+            <div class="author-credit author-credit--panel">
+                <a href="https://hevilking.com" target="_blank" rel="noopener noreferrer">
+                    Made by hevilking
+                </a>
+            </div>
+        </div>
+    </aside>
 
     <!-- 搜索引擎选择弹窗 -->
     <div class="search-engine-modal" id="searchEngineModal">
@@ -150,6 +262,18 @@
                         <p>全球最大的搜索引擎</p>
                     </div>
                 </div>
+
+                <div class="engine-option" data-engine="Bing" data-url="https://cn.bing.com/search?q=">
+                    <div class="engine-icon bing-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+                            <path fill="#00809D" d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
+                        </svg>
+                    </div>
+                    <div class="engine-info">
+                        <h4>Bing</h4>
+                        <p>微软出品搜索引擎</p>
+                    </div>
+                </div>
                 
                 <div class="engine-option" data-engine="百度" data-url="https://www.baidu.com/s?wd=">
                     <div class="engine-icon baidu-icon">
@@ -161,18 +285,6 @@
                     <div class="engine-info">
                         <h4>百度</h4>
                         <p>中文搜索引擎首选</p>
-                    </div>
-                </div>
-                
-                <div class="engine-option" data-engine="Bing" data-url="https://cn.bing.com/search?q=">
-                    <div class="engine-icon bing-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-                            <path fill="#00809D" d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
-                        </svg>
-                    </div>
-                    <div class="engine-info">
-                        <h4>Bing</h4>
-                        <p>微软出品搜索引擎</p>
                     </div>
                 </div>
                 
@@ -192,13 +304,6 @@
         </div>
     </div>
     
-    <!-- 作者标识 -->
-    <div class="author-credit">
-        <a href="https://hevilking.com" target="_blank" rel="noopener noreferrer">
-            Made by hevilking
-        </a>
-    </div>
-    
-    <script src="js/main.js?v=1.5"></script>
+    <script type="module" src="js/main.js?v=2.0"></script>
 </body>
 </html>

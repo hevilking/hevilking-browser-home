@@ -10,11 +10,22 @@ body {
     height: 100vh;
     overflow: hidden;
     position: relative;
+    --bg-overlay-opacity: 0.3;
+    --ui-glass-blur: 5px;
 }
 
-/* 背景图片 */
-.background {
+/* 背景系统 */
+.background-system {
     position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+}
+
+.background-layer {
+    position: absolute;
     top: 0;
     left: 0;
     width: 100%;
@@ -22,18 +33,19 @@ body {
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
-    transition: opacity 1s ease;
-    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.8s ease;
 }
 
-.background::after {
-    content: '';
+.background-layer.is-active {
+    opacity: 1;
+}
+
+.background-overlay {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.3);
+    inset: 0;
+    background-color: rgba(0, 0, 0, var(--bg-overlay-opacity));
+    pointer-events: none;
 }
 
 /* 主容器 */
@@ -41,9 +53,10 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
+    min-height: 100vh;
     height: 100vh;
-    padding: 20px;
+    padding: 80px 20px 72px;
     position: relative;
     z-index: 1;
 }
@@ -81,11 +94,32 @@ body {
     color: white;
 }
 
+.wallpaper-settings-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    backdrop-filter: blur(10px);
+    color: white;
+}
+
+.wallpaper-settings-btn:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+
 /* 搜索区域 */
 .search-container {
     width: 100%;
     max-width: 600px;
-    margin-bottom: 40px;
+    flex-shrink: 0;
+    margin-bottom: 24px;
     position: relative;
     z-index: 100;
 }
@@ -93,10 +127,12 @@ body {
 .search-box {
     display: flex;
     align-items: center;
+    width: 100%;
+    min-width: 0;
     background-color: rgba(255, 255, 255, 0.15);
     border-radius: 16px;
     overflow: visible;
-    backdrop-filter: blur(20px);
+    backdrop-filter: blur(var(--ui-glass-blur));
     border: 1px solid rgba(255, 255, 255, 0.2);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
@@ -212,7 +248,8 @@ body {
 }
 
 /* 搜索历史记录下拉框 */
-.search-history-dropdown {
+.search-history-dropdown,
+.search-suggestions-dropdown {
     position: absolute;
     top: calc(100% + 10px);
     left: 0;
@@ -231,7 +268,8 @@ body {
     pointer-events: none;
 }
 
-.search-history-dropdown.active {
+.search-history-dropdown.active,
+.search-suggestions-dropdown.active {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
@@ -247,6 +285,20 @@ body {
 }
 
 .search-history-header h4 {
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+    margin: 0;
+}
+
+.search-suggestions-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.search-suggestions-header h4 {
     color: white;
     font-size: 14px;
     font-weight: 500;
@@ -270,6 +322,12 @@ body {
 }
 
 .search-history-list {
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+
+.search-suggestions-list {
     max-height: 220px;
     overflow-y: auto;
     padding: 4px 0;
@@ -328,9 +386,47 @@ body {
     font-size: 14px;
 }
 
+.search-suggestion-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    color: rgba(255, 255, 255, 0.85);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.search-suggestion-item:hover,
+.search-suggestion-item.active {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.search-suggestion-item-icon {
+    color: rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.search-suggestion-item-text {
+    flex: 1;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.search-suggestions-empty {
+    padding: 20px;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+}
+
 /* 搜索输入框包装器 */
 .search-input-wrapper {
     flex: 1;
+    min-width: 0;
     position: relative;
     height: 100%;
     display: flex;
@@ -346,7 +442,7 @@ body {
     font-size: 16px;
     color: white;
     font-weight: 400;
-    padding: 0 16px;
+    padding: 0 72px 0 16px;
     height: 100%;
 }
 
@@ -422,12 +518,16 @@ body {
 .shortcuts-container {
     width: 100%;
     max-width: 800px;
+    height: fit-content;
+    max-height: min(72vh, 700px);
     background-color: rgba(255, 255, 255, 0.1);
     border-radius: 15px;
     padding: 20px;
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(var(--ui-glass-blur));
     position: relative;
     z-index: 10;
+    display: flex;
+    flex-direction: column;
 }
 
 .shortcuts-header {
@@ -435,6 +535,8 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 15px;
+    position: relative;
+    z-index: 1;
 }
 
 .shortcuts-header h3 {
@@ -446,51 +548,67 @@ body {
 .header-actions {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
 
-.drag-hint {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background-color: rgba(255, 255, 255, 0.15);
-    color: rgba(255, 255, 255, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: help;
-    transition: all 0.2s ease;
-}
-
-.drag-hint:hover {
-    background-color: rgba(255, 255, 255, 0.25);
-    color: white;
-}
-
+.shortcut-action-btn,
 .add-shortcut-btn {
     width: 30px;
     height: 30px;
     border-radius: 50%;
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.15);
     border: none;
-    color: white;
-    font-size: 18px;
-    cursor: pointer;
+    color: rgba(255, 255, 255, 0.7);
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 0.3s ease, transform 0.2s ease;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
 }
 
+.shortcut-action-btn:hover,
 .add-shortcut-btn:hover {
-    background-color: rgba(255, 255, 255, 0.3);
-    transform: scale(1.1);
+    background-color: rgba(255, 255, 255, 0.25);
+    color: white;
+    transform: scale(1.08);
+}
+
+.add-shortcut-btn {
+    color: white;
+    font-size: 18px;
+    background-color: rgba(255, 255, 255, 0.2);
 }
 
 .shortcuts {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
     gap: 15px;
+    max-height: min(60vh, 560px);
+    min-height: 70px;
+    overflow-y: auto;
+    align-content: start;
+    padding-top: 8px;
+    padding-right: 6px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    position: relative;
+    z-index: 2;
+}
+
+.shortcuts-empty {
+    grid-column: 1 / -1;
+    min-height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 13px;
+}
+
+.shortcuts::-webkit-scrollbar {
+    width: 0;
+    height: 0;
 }
 
 .shortcut {
@@ -530,12 +648,6 @@ body {
     justify-content: center;
     margin-bottom: 8px;
     backdrop-filter: blur(5px);
-}
-
-.shortcut-icon span {
-    font-size: 28px;
-    line-height: 1;
-    text-align: center;
 }
 
 .shortcut-name {
@@ -613,26 +725,35 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.2);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    transition: backdrop-filter 0.3s ease;
+    background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.35));
+    backdrop-filter: blur(14px) saturate(125%);
+    -webkit-backdrop-filter: blur(14px) saturate(125%);
+    transition: backdrop-filter 0.3s ease, background 0.3s ease;
 }
 
 .modal-content {
     position: relative;
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-radius: 18px;
+    background: linear-gradient(155deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 255, 0.78));
+    backdrop-filter: blur(24px) saturate(130%);
+    -webkit-backdrop-filter: blur(24px) saturate(130%);
+    border-radius: 20px;
     padding: 0;
     width: 90%;
     max-width: 400px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 18px 44px rgba(8, 15, 40, 0.24);
     transform: scale(0.95) translateY(10px);
-    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: all 0.28s cubic-bezier(0.22, 1, 0.36, 1);
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+.modal-content::before,
+.search-engine-modal .modal-content::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0));
+    pointer-events: none;
 }
 
 .modal.active .modal-content {
@@ -643,17 +764,20 @@ body {
     padding: 24px 24px 16px;
     text-align: center;
     position: relative;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.55);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.08));
 }
 
 .modal-header h2 {
     margin: 0;
-    color: #333;
+    color: #2f3448;
     font-size: 20px;
     font-weight: 600;
+    letter-spacing: 0.2px;
 }
 
 .modal-body {
-    padding: 8px 24px 24px;
+    padding: 18px 24px 24px;
 }
 
 .close {
@@ -666,19 +790,22 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    line-height: 1;
     font-size: 18px;
     font-weight: 300;
     cursor: pointer;
-    color: #666;
-    background: rgba(0, 0, 0, 0.05);
+    color: #5d647f;
+    background: rgba(255, 255, 255, 0.52);
     transition: all 0.2s ease;
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 
 .close:hover {
-    background: rgba(0, 0, 0, 0.1);
-    color: #333;
-    transform: rotate(90deg);
+    background: rgba(255, 255, 255, 0.8);
+    color: #343b59;
+    transform: scale(1.06);
 }
 
 .form-group {
@@ -688,31 +815,32 @@ body {
 .form-group label {
     display: block;
     margin-bottom: 8px;
-    color: #555;
+    color: #4a516e;
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
 }
 
 .form-group input {
     width: 100%;
     padding: 12px 16px;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(117, 127, 173, 0.28);
     border-radius: 12px;
     font-size: 14px;
-    background: rgba(255, 255, 255, 0.7);
+    color: #2f3448;
+    background: rgba(255, 255, 255, 0.78);
     transition: all 0.2s ease;
     box-sizing: border-box;
 }
 
 .form-group input:focus {
     outline: none;
-    border-color: rgba(102, 126, 234, 0.5);
-    background: rgba(255, 255, 255, 0.9);
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    border-color: rgba(103, 123, 231, 0.62);
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 0 0 3px rgba(103, 123, 231, 0.14);
 }
 
 .submit-btn {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.9), rgba(118, 75, 162, 0.9));
+    background: linear-gradient(135deg, rgba(107, 130, 245, 0.95), rgba(127, 84, 183, 0.95));
     color: white;
     border: none;
     padding: 12px 20px;
@@ -722,14 +850,14 @@ body {
     font-weight: 500;
     width: 100%;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    box-shadow: 0 10px 22px rgba(80, 104, 225, 0.28);
     position: relative;
     overflow: hidden;
 }
 
 .submit-btn:hover {
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 14px 26px rgba(78, 102, 224, 0.34);
 }
 
 .submit-btn:active {
@@ -740,14 +868,14 @@ body {
 /* 通知样式 */
 .notification {
     position: fixed;
-    top: 20px;
+    top: calc(12px + env(safe-area-inset-top, 0px));
     left: 50%;
     transform: translateX(-50%);
     background-color: rgba(0, 0, 0, 0.6);
     color: white;
-    padding: 15px 25px;
-    border-radius: 30px;
-    font-size: 16px;
+    padding: 10px 16px;
+    border-radius: 20px;
+    font-size: 13px;
     z-index: 1000;
     opacity: 0;
     transition: opacity 0.5s ease, transform 0.5s ease;
@@ -755,36 +883,86 @@ body {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
     border: 1px solid rgba(255, 255, 255, 0.1);
     font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
-    letter-spacing: 1px;
-    max-width: 80%;
+    letter-spacing: 0.5px;
+    max-width: min(60vw, 520px);
     text-align: center;
-    line-height: 1.5;
+    line-height: 1.35;
 }
 
 .notification.show {
     opacity: 1;
-    transform: translateX(-50%) translateY(10px);
+    transform: translateX(-50%) translateY(6px);
+}
+
+@supports (height: 100dvh) {
+    body {
+        height: 100dvh;
+    }
+
+    .container {
+        height: 100dvh;
+        min-height: 100dvh;
+    }
+}
+
+@media (max-height: 760px) {
+    .container {
+        padding-top: 64px;
+        padding-bottom: 58px;
+    }
+
+    .search-container {
+        margin-bottom: 20px;
+    }
+
 }
 
 /* 响应式设计 */
 @media (max-width: 600px) {
-    .search-box {
-        flex-direction: column;
-        border-radius: 15px;
+    .search-container {
+        margin-bottom: 28px;
     }
-    
-    .search-engine-selector {
-        border-right: none;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-        padding: 10px 15px;
+
+    .search-box {
+        flex-direction: row;
+        height: 52px;
+        border-radius: 14px;
+    }
+
+    .search-icon {
+        margin-left: 12px;
+        margin-right: 6px;
+    }
+
+    .search-engine-btn {
+        min-width: 86px;
+        height: 36px;
+        padding: 0 10px;
+        font-size: 12px;
+    }
+
+    .search-engine-btn span {
+        margin-left: 16px;
+        margin-right: 2px;
+        max-width: 56px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
     
     .search-input {
-        padding: 15px;
+        font-size: 15px;
+        padding-left: 12px;
+        padding-right: 64px;
+    }
+
+    .search-history-toggle {
+        right: 8px;
     }
     
     .search-button {
-        padding: 10px;
+        width: 42px;
+        height: 42px;
     }
     
     .shortcuts {
@@ -836,6 +1014,41 @@ body {
 }
 
 @media (max-width: 480px) {
+    .search-box {
+        height: 48px;
+    }
+
+    .search-icon {
+        display: none;
+    }
+
+    .search-engine-btn {
+        min-width: 72px;
+        padding: 0 8px;
+        gap: 4px;
+    }
+
+    .search-engine-btn span {
+        margin-left: 14px;
+        max-width: 42px;
+    }
+
+    .search-input {
+        font-size: 14px;
+        padding-left: 10px;
+        padding-right: 58px;
+    }
+
+    .search-button {
+        width: 38px;
+        height: 38px;
+    }
+
+    .search-history-toggle {
+        transform: translateY(-50%) scale(0.9);
+        transform-origin: right center;
+    }
+
     /* 更小屏幕的优化 */
     .modal-content {
         width: 98%;
@@ -988,27 +1201,27 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.2);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    transition: backdrop-filter 0.3s ease;
+    background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.35));
+    backdrop-filter: blur(14px) saturate(125%);
+    -webkit-backdrop-filter: blur(14px) saturate(125%);
+    transition: backdrop-filter 0.3s ease, background 0.3s ease;
 }
 
 .search-engine-modal .modal-content {
     position: relative;
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-radius: 18px;
+    background: linear-gradient(155deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 255, 0.78));
+    backdrop-filter: blur(24px) saturate(130%);
+    -webkit-backdrop-filter: blur(24px) saturate(130%);
+    border-radius: 20px;
     padding: 0;
     width: 90%;
     max-width: 420px;
     max-height: 70vh;
     overflow: hidden;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 18px 44px rgba(8, 15, 40, 0.24);
     transform: scale(0.95) translateY(10px);
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    transition: all 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    border: 1px solid rgba(255, 255, 255, 0.55);
 }
 
 .search-engine-modal.active .modal-content {
@@ -1020,19 +1233,25 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 20px 24px 16px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.55);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.08));
 }
 
 .search-engine-modal .modal-header h3 {
     margin: 0;
     font-size: 18px;
     font-weight: 600;
-    color: #333;
+    color: #2f3448;
+    letter-spacing: 0.2px;
 }
 
+.modal .close-btn,
 .search-engine-modal .close-btn {
-    background: none;
-    border: none;
+    position: absolute;
+    right: 16px;
+    top: 16px;
+    background: rgba(255, 255, 255, 0.52);
+    border: 1px solid rgba(255, 255, 255, 0.6);
     width: 32px;
     height: 32px;
     border-radius: 50%;
@@ -1040,36 +1259,65 @@ body {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    color: #666;
+    color: #5d647f;
     transition: all 0.2s ease;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 
+.modal .close-btn:hover,
 .search-engine-modal .close-btn:hover {
-    background: rgba(0, 0, 0, 0.05);
-    color: #333;
+    background: rgba(255, 255, 255, 0.8);
+    color: #343b59;
 }
 
 .search-engine-modal .search-engines {
-    padding: 12px 16px;
+    padding: 14px 16px 16px;
     max-height: 50vh;
     overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(105, 123, 226, 0.45) rgba(255, 255, 255, 0.18);
+}
+
+.search-engine-modal .search-engines::-webkit-scrollbar {
+    width: 8px;
+}
+
+.search-engine-modal .search-engines::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+}
+
+.search-engine-modal .search-engines::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(108, 129, 238, 0.75), rgba(129, 86, 191, 0.75));
+    border-radius: 8px;
 }
 
 .search-engine-modal .engine-option {
     display: flex;
     align-items: center;
     padding: 14px;
-    border-radius: 12px;
+    border-radius: 14px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.2s ease, box-shadow 0.25s ease;
     margin-bottom: 6px;
-    border: 1px solid transparent;
+    border: 1px solid rgba(117, 127, 173, 0.18);
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 
 .search-engine-modal .engine-option:hover {
-    background: rgba(0, 0, 0, 0.03);
-    transform: translateX(3px);
-    border-color: rgba(102, 126, 234, 0.2);
+    background: rgba(255, 255, 255, 0.68);
+    transform: translateY(-1px);
+    border-color: rgba(102, 126, 234, 0.34);
+    box-shadow: 0 8px 16px rgba(90, 108, 207, 0.12);
+}
+
+.search-engine-modal .engine-option.selected {
+    border-color: rgba(103, 123, 231, 0.52);
+    background: linear-gradient(135deg, rgba(103, 123, 231, 0.12), rgba(127, 84, 183, 0.12));
+    box-shadow: 0 10px 20px rgba(84, 105, 216, 0.18);
 }
 
 .search-engine-modal .engine-option:last-child {
@@ -1111,13 +1359,13 @@ body {
     margin: 0 0 3px 0;
     font-size: 15px;
     font-weight: 600;
-    color: #333;
+    color: #2f3448;
 }
 
 .search-engine-modal .engine-info p {
     margin: 0;
     font-size: 13px;
-    color: #666;
+    color: #59607b;
 }
 
 /* 搜索引擎选择器样式 - 已替换为按钮 */
@@ -1172,38 +1420,205 @@ body {
 
 /* 作者标识样式 */
 .author-credit {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 10;
     text-align: center;
 }
 
 .author-credit a {
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(255, 255, 255, 0.58);
     text-decoration: none;
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 400;
-    padding: 8px 16px;
-    border-radius: 20px;
-    background-color: rgba(0, 0, 0, 0.2);
-    backdrop-filter: blur(10px);
-    transition: all 0.3s ease;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    letter-spacing: 0.2px;
+    transition: color 0.2s ease, opacity 0.2s ease;
+    opacity: 0.9;
 }
 
 .author-credit a:hover {
-    color: rgba(255, 255, 255, 0.9);
-    background-color: rgba(0, 0, 0, 0.3);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    color: rgba(255, 255, 255, 0.82);
+    opacity: 1;
 }
 
-/* 移动端作者标识适配 */
-@media (max-width: 768px) {
-    .author-credit a {
-        font-size: 12px;
-        padding: 6px 12px;
-    }
+.author-credit--panel {
+    margin-top: 8px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.bg-settings-panel {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 320px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(20, 24, 38, 0.78);
+    backdrop-filter: blur(16px);
+    color: #f7f8fb;
+    z-index: 300;
+    transform: translateX(120%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.bg-settings-panel::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}
+
+.bg-settings-panel.active {
+    transform: translateX(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.bg-settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.bg-settings-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.bg-settings-close {
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.bg-settings-body {
+    padding: 14px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.bg-settings-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.bg-settings-item label {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.88);
+}
+
+.bg-settings-item select,
+.bg-settings-item input[type="range"],
+.bg-settings-item input[type="color"],
+.bg-settings-item input[type="file"] {
+    width: 100%;
+}
+
+.bg-settings-item select {
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+    color: #f7f8fb;
+}
+
+.bg-settings-item select option {
+    background: #ffffff;
+    color: #1f2537;
+}
+
+.bg-settings-actions button {
+    width: 100%;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 14px;
+    background: linear-gradient(135deg, rgba(107, 130, 245, 0.95), rgba(127, 84, 183, 0.95));
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.bg-auto-rotate-toggle {
+    display: flex;
+    align-items: center;
+}
+
+.bg-auto-rotate-toggle .toggle-label {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.bg-settings-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.bg-settings-actions .bg-reset-btn {
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.bg-settings-actions .bg-reset-btn:hover {
+    background: rgba(255, 255, 255, 0.24);
+}
+
+#bgUploadHint {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.bg-uploaded-list {
+    max-height: 150px;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.bg-uploaded-list::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}
+
+.bg-upload-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.bg-upload-item-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+}
+
+.bg-upload-item-delete {
+    border: none;
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #fff;
+    background: rgba(255, 96, 96, 0.8);
+    cursor: pointer;
+}
+
+.bg-upload-empty {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.65);
 }

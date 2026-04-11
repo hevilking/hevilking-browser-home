@@ -1,10 +1,40 @@
+import { initBackgroundSystem } from './background/index.js';
+
 // DOM元素
-const background = document.getElementById('background');
 const wallpaperSwitch = document.getElementById('wallpaperSwitch');
+const wallpaperSettingsBtn = document.getElementById('wallpaperSettingsBtn');
+const bgSettingsPanel = document.getElementById('bgSettingsPanel');
+const bgSettingsClose = document.getElementById('bgSettingsClose');
+const bgModeSelect = document.getElementById('bgModeSelect');
+const bgAutoRotate = document.getElementById('bgAutoRotate');
+const bgRotateInterval = document.getElementById('bgRotateInterval');
+const bgRotateIntervalValue = document.getElementById('bgRotateIntervalValue');
+const bgOverlayOpacity = document.getElementById('bgOverlayOpacity');
+const bgOverlayOpacityValue = document.getElementById('bgOverlayOpacityValue');
+const bgUiGlassBlur = document.getElementById('bgUiGlassBlur');
+const bgUiGlassBlurValue = document.getElementById('bgUiGlassBlurValue');
+const bgBlur = document.getElementById('bgBlur');
+const bgBlurValue = document.getElementById('bgBlurValue');
+const bgBrightness = document.getElementById('bgBrightness');
+const bgBrightnessValue = document.getElementById('bgBrightnessValue');
+const bgSaturate = document.getElementById('bgSaturate');
+const bgSaturateValue = document.getElementById('bgSaturateValue');
+const bgContrast = document.getElementById('bgContrast');
+const bgContrastValue = document.getElementById('bgContrastValue');
+const bgSolidColor = document.getElementById('bgSolidColor');
+const bgSolidColorRow = document.getElementById('bgSolidColorRow');
+const bgUploadInput = document.getElementById('bgUploadInput');
+const bgUploadHint = document.getElementById('bgUploadHint');
+const bgUploadedList = document.getElementById('bgUploadedList');
+const bgResetBtn = document.getElementById('bgResetBtn');
+const bgApplyBtn = document.getElementById('bgApplyBtn');
 const searchInput = document.getElementById('searchInput');
 const searchButton = document.getElementById('searchButton');
 const shortcuts = document.getElementById('shortcuts');
 const addShortcutBtn = document.getElementById('addShortcutBtn');
+const dragHintBtn = document.getElementById('dragHintBtn');
+const copyShortcutMetaBtn = document.getElementById('copyShortcutMetaBtn');
+const importShortcutMetaBtn = document.getElementById('importShortcutMetaBtn');
 const addShortcutModal = document.getElementById('addShortcutModal');
 const closeModal = document.getElementById('closeModal');
 const shortcutForm = document.getElementById('shortcutForm');
@@ -26,6 +56,8 @@ const searchHistorySwitch = document.getElementById('searchHistorySwitch');
 const searchHistoryDropdown = document.getElementById('searchHistoryDropdown');
 const searchHistoryList = document.getElementById('searchHistoryList');
 const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+const searchSuggestionsDropdown = document.getElementById('searchSuggestionsDropdown');
+const searchSuggestionsList = document.getElementById('searchSuggestionsList');
 
 // 当前选中的搜索引擎URL
 let currentSearchEngineUrl = 'https://cn.bing.com/search?q=';
@@ -35,12 +67,43 @@ const MAX_SEARCH_HISTORY = 5;
 let searchHistoryEnabled = localStorage.getItem('searchHistoryEnabled') !== 'false';
 let searchHistory = JSON.parse(localStorage.getItem('searchHistory')) || [];
 let hideSearchHistoryTimeout = null;
+let searchDropdownMode = 'hidden';
+let searchSuggestionDebounceTimer = null;
+let searchSuggestionRequestController = null;
+let activeSuggestionIndex = -1;
+let searchSuggestions = [];
+
+const SEARCH_SUGGESTION_DEBOUNCE = 180;
+const MAX_SEARCH_SUGGESTIONS = 8;
+const SHORTCUT_META_VERSION = 1;
+const FAVICON_CACHE_KEY = 'shortcutFaviconCacheV2';
+const FAVICON_CACHE_SUCCESS_TTL = 7 * 24 * 60 * 60 * 1000;
+const FAVICON_CACHE_FAILURE_TTL = 24 * 60 * 60 * 1000;
+let faviconCacheState = null;
+
+const SEARCH_SUGGESTION_APIS = {
+    Bing: (query) => [
+        `https://api.bing.com/osjson.aspx?query=${encodeURIComponent(query)}`,
+        `https://api.bing.com/osjson.aspx?query=${encodeURIComponent(query)}&language=zh-cn`
+    ],
+    Google: (query) => [
+        `https://suggestqueries.google.com/complete/search?client=firefox&q=${encodeURIComponent(query)}`,
+        `https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(query)}`
+    ],
+    百度: (query) => [
+        `https://www.baidu.com/sugrec?prod=pc&wd=${encodeURIComponent(query)}`,
+        `https://suggestion.baidu.com/su?wd=${encodeURIComponent(query)}&cb=baiduSuggestionCallback`
+    ],
+    DuckDuckGo: (query) => [
+        `https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&type=list`
+    ]
+};
+const DEFAULT_SEARCH_ENGINE = 'Bing';
+const SEARCH_ENGINE_STORAGE_KEY = 'defaultSearchEngine';
 
 // 编辑模式相关变量
 let editingIndex = -1;
-
-// 壁纸文件夹路径
-const wallpaperPath = 'assets/images/';
+let backgroundController = null;
 
 // 默认快捷方式
 const defaultShortcuts = [
@@ -52,124 +115,109 @@ const defaultShortcuts = [
 
 // 初始化页面
 document.addEventListener('DOMContentLoaded', function() {
-    setDefaultWallpaper();
-    currentEngine.textContent = 'Bing';
-    searchEngineBtn.setAttribute('data-engine', 'Bing');
     engineOptions = document.querySelectorAll('.engine-option');
+    initSearchEngine();
     loadShortcuts();
     initSearchHistory();
     setupEventListeners();
-    
-    try {
-        setRandomWallpaper();
-    } catch (error) {
-        setDefaultWallpaper();
-    }
+    initBackgroundEngine();
 });
 
+function initSearchEngine() {
+    const savedEngineName = localStorage.getItem(SEARCH_ENGINE_STORAGE_KEY) || DEFAULT_SEARCH_ENGINE;
+    const savedEngineOption = Array.from(engineOptions).find(option => option.getAttribute('data-engine') === savedEngineName);
+    const fallbackEngineOption = Array.from(engineOptions).find(option => option.getAttribute('data-engine') === DEFAULT_SEARCH_ENGINE);
+    const selectedOption = savedEngineOption || fallbackEngineOption;
+
+    if (selectedOption) {
+        selectSearchEngine(selectedOption, { closeModalAfterSelect: false, showNotificationAfterSelect: false });
+        return;
+    }
+
+    currentEngine.textContent = DEFAULT_SEARCH_ENGINE;
+    searchEngineBtn.setAttribute('data-engine', DEFAULT_SEARCH_ENGINE);
+}
+
 // 设置随机壁纸
-function setRandomWallpaper() {
+async function setRandomWallpaper() {
+    if (!backgroundController) {
+        return;
+    }
     showNotification('正在寻觅新的风景...');
-    
-    const currentBackground = background.style.backgroundImage;
-    
-    const wallpapers = [
-        'assets/images/undifine.webp'
-    ];
-    
-    const onlineWallpapers = [
-        'https://picsum.photos/1920/1080?random=1',
-        'https://picsum.photos/1920/1080?random=2',
-        'https://picsum.photos/1920/1080?random=3',
-        'https://picsum.photos/1920/1080?random=4',
-        'https://picsum.photos/1920/1080?random=5'
-    ];
-    
-    const allWallpapers = [...wallpapers, ...onlineWallpapers];
-    const randomIndex = Math.floor(Math.random() * allWallpapers.length);
-    const wallpaperUrl = allWallpapers[randomIndex];
-    
-    console.log('尝试加载壁纸:', wallpaperUrl);
-    
-    const img = new Image();
-    
-    const handleError = () => {
-        console.error('壁纸加载失败:', wallpaperUrl);
-        showNotification('网络如梦，暂留素雅');
-        if (currentBackground) {
-            background.style.backgroundImage = currentBackground;
-        }
-    };
-    
-    const handleSuccess = () => {
-        clearTimeout(timeoutId);
-        try {
-            console.log('壁纸加载成功，设置背景:', wallpaperUrl);
-            background.style.backgroundImage = `url('${wallpaperUrl}')`;
-            background.style.display = 'none';
-            background.offsetHeight;
-            background.style.display = '';
-            showNotification('风景如画，心境如诗');
-        } catch (error) {
-            console.error('设置壁纸时出错:', error);
-            handleError();
-        }
-    };
-    
-    img.onload = handleSuccess;
-    img.onerror = handleError;
-    
-    const timeoutId = setTimeout(() => {
-        console.warn('壁纸加载超时:', wallpaperUrl);
-        handleError();
-    }, 5000);
-    
     try {
-        img.src = wallpaperUrl;
+        await backgroundController.nextBackground({ silent: true });
     } catch (error) {
-        clearTimeout(timeoutId);
-        console.error('设置图片源时出错:', error);
-        handleError();
+        console.error('切换背景失败:', error);
+        showNotification('网络如梦，暂留素雅');
     }
 }
 
 // 设置默认壁纸
 function setDefaultWallpaper() {
-    const defaultUrl = `${wallpaperPath}undifine.webp`;
-    background.style.backgroundImage = `url('${defaultUrl}')`;
+    if (!backgroundController) {
+        return;
+    }
+    backgroundController.updateSettings({ mode: 'local' }).catch((error) => {
+        console.error('恢复默认背景失败:', error);
+    });
 }
 
 // 设置事件监听器
 function setupEventListeners() {
     wallpaperSwitch.addEventListener('click', setRandomWallpaper);
+    wallpaperSettingsBtn.addEventListener('click', openBackgroundSettingsPanel);
+    bgSettingsClose.addEventListener('click', closeBackgroundSettingsPanel);
+    bgApplyBtn.addEventListener('click', applyBackgroundSettings);
+    bgResetBtn.addEventListener('click', resetBackgroundSettings);
+    bgUploadInput.addEventListener('change', handleBackgroundUpload);
+    bgUploadedList.addEventListener('click', handleUploadedListClick);
+    bgModeSelect.addEventListener('change', toggleSolidColorVisibility);
+    bgRotateInterval.addEventListener('input', () => updateRangeLabel(bgRotateIntervalValue, bgRotateInterval.value, 's'));
+    bgOverlayOpacity.addEventListener('input', () => updateRangeLabel(bgOverlayOpacityValue, bgOverlayOpacity.value, '%'));
+    bgUiGlassBlur.addEventListener('input', () => updateRangeLabel(bgUiGlassBlurValue, bgUiGlassBlur.value, 'px'));
+    bgBlur.addEventListener('input', () => updateRangeLabel(bgBlurValue, bgBlur.value, 'px'));
+    bgBrightness.addEventListener('input', () => updateRangeLabel(bgBrightnessValue, bgBrightness.value, '%'));
+    bgSaturate.addEventListener('input', () => updateRangeLabel(bgSaturateValue, bgSaturate.value, '%'));
+    bgContrast.addEventListener('input', () => updateRangeLabel(bgContrastValue, bgContrast.value, '%'));
     
     searchButton.addEventListener('click', performSearch);
-    searchInput.addEventListener('keypress', (e) => e.key === 'Enter' && performSearch());
+    searchInput.addEventListener('input', handleSearchInputChange);
+    searchInput.addEventListener('keydown', handleSearchInputKeydown);
     
     searchHistorySwitch.addEventListener('change', toggleSearchHistory);
     
-    searchInput.addEventListener('focus', showSearchHistory);
+    searchInput.addEventListener('focus', updateSearchDropdownMode);
     searchInput.addEventListener('blur', function() {
-        hideSearchHistoryTimeout = setTimeout(hideSearchHistory, 300);
+        hideSearchHistoryTimeout = setTimeout(hideSearchDropdown, 300);
     });
     
-    searchHistoryDropdown.addEventListener('mouseenter', function() {
-        if (hideSearchHistoryTimeout) {
-            clearTimeout(hideSearchHistoryTimeout);
-            hideSearchHistoryTimeout = null;
-        }
-    });
+    searchHistoryDropdown.addEventListener('mouseenter', clearHideSearchDropdownTimeout);
+    searchSuggestionsDropdown.addEventListener('mouseenter', clearHideSearchDropdownTimeout);
     
     searchHistoryDropdown.addEventListener('mouseleave', function() {
         setTimeout(() => {
             if (document.activeElement !== searchInput) {
-                hideSearchHistoryTimeout = setTimeout(hideSearchHistory, 300);
+                hideSearchHistoryTimeout = setTimeout(hideSearchDropdown, 300);
+            }
+        }, 50);
+    });
+
+    searchSuggestionsDropdown.addEventListener('mouseleave', function() {
+        setTimeout(() => {
+            if (document.activeElement !== searchInput) {
+                hideSearchHistoryTimeout = setTimeout(hideSearchDropdown, 300);
             }
         }, 50);
     });
     
     searchHistoryDropdown.addEventListener('mousedown', function(e) {
         if (e.target.closest('.search-history-item') || e.target.closest('.search-history-item-delete')) {
+            e.preventDefault();
+        }
+    });
+
+    searchSuggestionsDropdown.addEventListener('mousedown', function(e) {
+        if (e.target.closest('.search-suggestion-item')) {
             e.preventDefault();
         }
     });
@@ -180,6 +228,22 @@ function setupEventListeners() {
         } else if (e.target.closest('.search-history-item-delete')) {
             setTimeout(() => searchInput.focus(), 0);
         }
+    });
+
+    searchSuggestionsDropdown.addEventListener('click', function(e) {
+        const suggestionItem = e.target.closest('.search-suggestion-item');
+        if (!suggestionItem) {
+            return;
+        }
+
+        const term = suggestionItem.dataset.term;
+        if (!term) {
+            return;
+        }
+
+        searchInput.value = term;
+        performSearch();
+        setTimeout(() => searchInput.focus(), 0);
     });
     
     clearHistoryBtn.addEventListener('click', clearSearchHistory);
@@ -198,6 +262,11 @@ function setupEventListeners() {
     addShortcutBtn.addEventListener('click', () => {
         addShortcutModal.classList.add('active');
     });
+    dragHintBtn.addEventListener('click', () => {
+        showNotification('拖拽快捷方式到目标卡片上可以重新排序');
+    });
+    copyShortcutMetaBtn.addEventListener('click', copyShortcutsMetadata);
+    importShortcutMetaBtn.addEventListener('click', importShortcutsMetadata);
     
     closeModal.addEventListener('click', () => {
         addShortcutModal.classList.remove('active');
@@ -215,6 +284,10 @@ function setupEventListeners() {
             modalTitle.textContent = '添加快捷方式';
             submitBtn.textContent = '添加快捷方式';
         }
+
+        if (!bgSettingsPanel.contains(e.target) && !wallpaperSettingsBtn.contains(e.target)) {
+            closeBackgroundSettingsPanel();
+        }
     });
     
     shortcutForm.addEventListener('submit', (e) => {
@@ -225,6 +298,221 @@ function setupEventListeners() {
             addShortcut();
         }
     });
+}
+
+function initBackgroundEngine() {
+    backgroundController = initBackgroundSystem({
+        onStatus: (message) => showNotification(message)
+    });
+
+    backgroundController.init().then(() => {
+        syncBackgroundSettingsPanel();
+    }).catch((error) => {
+        console.error('初始化背景系统失败:', error);
+    });
+}
+
+function openBackgroundSettingsPanel() {
+    syncBackgroundSettingsPanel();
+    renderUploadedBackgroundList();
+    bgSettingsPanel.classList.add('active');
+    bgSettingsPanel.setAttribute('aria-hidden', 'false');
+}
+
+function closeBackgroundSettingsPanel() {
+    bgSettingsPanel.classList.remove('active');
+    bgSettingsPanel.setAttribute('aria-hidden', 'true');
+}
+
+function updateRangeLabel(valueElement, value, suffix = '') {
+    valueElement.textContent = `${value}${suffix}`;
+}
+
+function syncBackgroundSettingsPanel() {
+    if (!backgroundController) {
+        return;
+    }
+
+    const settings = backgroundController.getSettings();
+    bgModeSelect.value = settings.mode;
+    bgAutoRotate.checked = settings.autoRotate;
+    bgRotateInterval.value = settings.rotateIntervalSec;
+    bgOverlayOpacity.value = settings.overlayOpacity;
+    bgUiGlassBlur.value = settings.uiGlassBlur ?? 5;
+    bgBlur.value = settings.filters.blur;
+    bgBrightness.value = settings.filters.brightness;
+    bgSaturate.value = settings.filters.saturate;
+    bgContrast.value = settings.filters.contrast;
+    bgSolidColor.value = settings.solidColor || '#1f2937';
+
+    updateRangeLabel(bgRotateIntervalValue, bgRotateInterval.value, 's');
+    updateRangeLabel(bgOverlayOpacityValue, bgOverlayOpacity.value, '%');
+    updateRangeLabel(bgUiGlassBlurValue, bgUiGlassBlur.value, 'px');
+    updateRangeLabel(bgBlurValue, bgBlur.value, 'px');
+    updateRangeLabel(bgBrightnessValue, bgBrightness.value, '%');
+    updateRangeLabel(bgSaturateValue, bgSaturate.value, '%');
+    updateRangeLabel(bgContrastValue, bgContrast.value, '%');
+    toggleSolidColorVisibility();
+}
+
+function toggleSolidColorVisibility() {
+    if (bgModeSelect.value === 'solid') {
+        bgSolidColorRow.style.display = '';
+        return;
+    }
+    bgSolidColorRow.style.display = 'none';
+}
+
+async function applyBackgroundSettings() {
+    if (!backgroundController) {
+        return;
+    }
+
+    const patch = {
+        mode: bgModeSelect.value,
+        autoRotate: bgAutoRotate.checked,
+        rotateIntervalSec: Number(bgRotateInterval.value),
+        overlayOpacity: Number(bgOverlayOpacity.value),
+        uiGlassBlur: Number(bgUiGlassBlur.value),
+        solidColor: bgSolidColor.value,
+        filters: {
+            blur: Number(bgBlur.value),
+            brightness: Number(bgBrightness.value),
+            saturate: Number(bgSaturate.value),
+            contrast: Number(bgContrast.value)
+        }
+    };
+
+    try {
+        await backgroundController.updateSettings(patch);
+        if (patch.mode === 'solid' || patch.mode === 'gradient') {
+            await backgroundController.nextBackground({ silent: true });
+        }
+        showNotification('背景设置已应用');
+        closeBackgroundSettingsPanel();
+    } catch (error) {
+        console.error('应用背景设置失败:', error);
+        showNotification('背景设置应用失败');
+    }
+}
+
+async function resetBackgroundSettings() {
+    if (!backgroundController) {
+        return;
+    }
+
+    try {
+        await backgroundController.resetSettings();
+        syncBackgroundSettingsPanel();
+        showNotification('已恢复默认背景设置');
+    } catch (error) {
+        console.error('恢复默认背景设置失败:', error);
+        showNotification('恢复默认设置失败');
+    }
+}
+
+function formatBytes(bytes) {
+    if (bytes < 1024) {
+        return `${bytes}B`;
+    }
+    if (bytes < 1024 * 1024) {
+        return `${(bytes / 1024).toFixed(1)}KB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+async function renderUploadedBackgroundList() {
+    if (!backgroundController) {
+        return;
+    }
+
+    try {
+        const [items, stats] = await Promise.all([
+            backgroundController.listCustomImages(),
+            backgroundController.getCustomImageStats()
+        ]);
+
+        bgUploadHint.textContent = `单图上限 8MB，总上限 80MB，最多 30 张。已用 ${items.length}/30（${formatBytes(stats.totalBytes)}）`;
+        bgUploadedList.innerHTML = '';
+
+        if (items.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'bg-upload-empty';
+            empty.textContent = '暂无上传图片';
+            bgUploadedList.appendChild(empty);
+            return;
+        }
+
+        items.forEach((item) => {
+            const row = document.createElement('div');
+            row.className = 'bg-upload-item';
+            row.dataset.id = item.id;
+
+            const name = document.createElement('div');
+            name.className = 'bg-upload-item-name';
+            name.textContent = `${item.name} (${formatBytes(item.size)})`;
+
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'bg-upload-item-delete';
+            delBtn.dataset.action = 'delete';
+            delBtn.dataset.id = item.id;
+            delBtn.textContent = '删除';
+
+            row.appendChild(name);
+            row.appendChild(delBtn);
+            bgUploadedList.appendChild(row);
+        });
+    } catch (error) {
+        console.error('读取上传背景列表失败:', error);
+        bgUploadHint.textContent = '读取本地图片库失败';
+    }
+}
+
+async function handleBackgroundUpload(e) {
+    if (!backgroundController) {
+        return;
+    }
+
+    const file = e.target.files && e.target.files[0];
+    if (!file) {
+        return;
+    }
+
+    try {
+        await backgroundController.addCustomImage(file);
+        await renderUploadedBackgroundList();
+        if (bgModeSelect.value === 'local' || bgModeSelect.value === 'mixed') {
+            await backgroundController.nextBackground({ silent: true });
+        }
+        showNotification('背景图片已保存到本地');
+    } catch (error) {
+        console.error('上传背景图片失败:', error);
+        showNotification(error.message || '上传失败');
+    } finally {
+        bgUploadInput.value = '';
+    }
+}
+
+async function handleUploadedListClick(e) {
+    const button = e.target.closest('button[data-action="delete"]');
+    if (!button || !backgroundController) {
+        return;
+    }
+
+    const imageId = button.dataset.id;
+    if (!imageId) {
+        return;
+    }
+
+    try {
+        await backgroundController.removeCustomImage(imageId);
+        await renderUploadedBackgroundList();
+        showNotification('已删除本地背景');
+    } catch (error) {
+        console.error('删除本地背景失败:', error);
+        showNotification('删除失败');
+    }
 }
 
 // 显示通知
@@ -243,6 +531,134 @@ function showNotification(message) {
     }, 3000);
 }
 
+function getSavedShortcuts() {
+    const raw = localStorage.getItem('shortcuts');
+    if (!raw) {
+        return [...defaultShortcuts];
+    }
+
+    try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [...defaultShortcuts];
+    } catch (error) {
+        return [...defaultShortcuts];
+    }
+}
+
+function normalizeShortcutUrl(url) {
+    const trimmed = String(url || '').trim();
+    if (!trimmed) {
+        return '';
+    }
+
+    const formatted = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    return formatted;
+}
+
+function normalizeShortcutItem(item) {
+    if (!item || typeof item !== 'object') {
+        return null;
+    }
+
+    const name = String(item.name || '').trim();
+    const normalizedUrl = normalizeShortcutUrl(item.url);
+
+    if (!name || !normalizedUrl) {
+        return null;
+    }
+
+    try {
+        const parsed = new URL(normalizedUrl);
+        if (!/^https?:$/.test(parsed.protocol)) {
+            return null;
+        }
+        return {
+            name: name.slice(0, 60),
+            url: parsed.toString()
+        };
+    } catch (error) {
+        return null;
+    }
+}
+
+function buildShortcutsMetadata() {
+    return {
+        version: SHORTCUT_META_VERSION,
+        exportedAt: new Date().toISOString(),
+        shortcuts: getSavedShortcuts().map((item) => ({
+            name: item.name,
+            url: item.url
+        }))
+    };
+}
+
+function parseShortcutsMetadata(text) {
+    let parsed;
+    try {
+        parsed = JSON.parse(text);
+    } catch (error) {
+        throw new Error('元数据不是有效 JSON');
+    }
+
+    const rawShortcuts = Array.isArray(parsed) ? parsed : parsed && parsed.shortcuts;
+    if (!Array.isArray(rawShortcuts)) {
+        throw new Error('元数据格式错误：需要 shortcuts 数组');
+    }
+
+    const normalized = rawShortcuts
+        .map(normalizeShortcutItem)
+        .filter(Boolean);
+
+    if (normalized.length === 0) {
+        throw new Error('元数据中没有可导入的快捷方式');
+    }
+
+    return normalized;
+}
+
+async function copyShortcutsMetadata() {
+    const metadata = buildShortcutsMetadata();
+    const text = JSON.stringify(metadata, null, 2);
+
+    try {
+        await navigator.clipboard.writeText(text);
+        showNotification(`已复制 ${metadata.shortcuts.length} 个快捷方式元数据`);
+    } catch (error) {
+        window.prompt('复制失败，请手动复制下方元数据：', text);
+        showNotification('剪贴板不可用，已改为手动复制');
+    }
+}
+
+function importShortcutsMetadata() {
+    const input = window.prompt('请粘贴快捷方式元数据（JSON）');
+    if (!input || !input.trim()) {
+        return;
+    }
+
+    let importedShortcuts;
+    try {
+        importedShortcuts = parseShortcutsMetadata(input.trim());
+    } catch (error) {
+        showNotification(error.message || '元数据格式校验失败');
+        return;
+    }
+
+    const current = getSavedShortcuts();
+    const merged = [...current];
+    const existingSet = new Set(current.map((item) => `${item.name}@@${item.url}`));
+
+    importedShortcuts.forEach((item) => {
+        const key = `${item.name}@@${item.url}`;
+        if (!existingSet.has(key)) {
+            existingSet.add(key);
+            merged.push(item);
+        }
+    });
+
+    saveAndRenderShortcuts(merged);
+    showNotification(`导入完成，新增 ${merged.length - current.length} 个快捷方式`);
+}
+
 // 执行搜索
 function performSearch() {
     const searchTerm = searchInput.value.trim();
@@ -254,7 +670,265 @@ function performSearch() {
         const searchUrl = currentSearchEngineUrl + encodeURIComponent(searchTerm);
         window.open(searchUrl, '_blank');
         searchInput.value = '';
+        clearSuggestions();
+        updateSearchDropdownMode();
     }
+}
+
+function clearHideSearchDropdownTimeout() {
+    if (hideSearchHistoryTimeout) {
+        clearTimeout(hideSearchHistoryTimeout);
+        hideSearchHistoryTimeout = null;
+    }
+}
+
+function clearSuggestions() {
+    activeSuggestionIndex = -1;
+    searchSuggestions = [];
+    searchSuggestionsList.innerHTML = '';
+}
+
+function hideAllSearchDropdowns() {
+    searchHistoryDropdown.classList.remove('active');
+    searchSuggestionsDropdown.classList.remove('active');
+    searchDropdownMode = 'hidden';
+}
+
+function switchSearchDropdownMode(mode) {
+    searchDropdownMode = mode;
+
+    if (mode === 'history') {
+        searchSuggestionsDropdown.classList.remove('active');
+        searchHistoryDropdown.classList.add('active');
+        return;
+    }
+
+    if (mode === 'suggestions') {
+        searchHistoryDropdown.classList.remove('active');
+        searchSuggestionsDropdown.classList.add('active');
+        return;
+    }
+
+    hideAllSearchDropdowns();
+}
+
+function hideSearchDropdown() {
+    clearHideSearchDropdownTimeout();
+
+    if (document.activeElement !== searchInput) {
+        hideAllSearchDropdowns();
+    }
+}
+
+function handleSearchInputChange() {
+    updateSearchDropdownMode();
+}
+
+function handleSearchInputKeydown(e) {
+    if (searchDropdownMode !== 'suggestions' || !searchSuggestionsDropdown.classList.contains('active')) {
+        if (e.key === 'Enter') {
+            performSearch();
+        } else if (e.key === 'Escape') {
+            hideAllSearchDropdowns();
+        }
+        return;
+    }
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (searchSuggestions.length === 0) {
+            return;
+        }
+        activeSuggestionIndex = (activeSuggestionIndex + 1) % searchSuggestions.length;
+        renderSearchSuggestions();
+        return;
+    }
+
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (searchSuggestions.length === 0) {
+            return;
+        }
+        activeSuggestionIndex = activeSuggestionIndex <= 0 ? searchSuggestions.length - 1 : activeSuggestionIndex - 1;
+        renderSearchSuggestions();
+        return;
+    }
+
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        if (activeSuggestionIndex >= 0 && searchSuggestions[activeSuggestionIndex]) {
+            searchInput.value = searchSuggestions[activeSuggestionIndex];
+        }
+        performSearch();
+        return;
+    }
+
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        hideAllSearchDropdowns();
+    }
+}
+
+function getCurrentEngineName() {
+    return searchEngineBtn.getAttribute('data-engine') || currentEngine.textContent || 'Bing';
+}
+
+function parseSuggestionData(engineName, rawData) {
+    if (engineName === 'DuckDuckGo' && Array.isArray(rawData)) {
+        return rawData.map(item => item && item.phrase).filter(Boolean);
+    }
+
+    if ((engineName === 'Bing' || engineName === 'Google') && Array.isArray(rawData) && Array.isArray(rawData[1])) {
+        return rawData[1].filter(Boolean);
+    }
+
+    if (engineName === '百度') {
+        if (rawData && typeof rawData === 'object' && Array.isArray(rawData.g)) {
+            return rawData.g.map(item => item && item.q).filter(Boolean);
+        }
+
+        const responseText = typeof rawData === 'string' ? rawData : '';
+        const match = responseText.match(/baiduSuggestionCallback\((.*)\);?$/);
+        if (!match || !match[1]) {
+            return [];
+        }
+
+        const parsed = Function(`"use strict"; return (${match[1]});`)();
+        if (!parsed || !Array.isArray(parsed.s)) {
+            return [];
+        }
+
+        return parsed.s.filter(Boolean);
+    }
+
+    return [];
+}
+
+async function fetchSuggestions(query) {
+    const engineName = getCurrentEngineName();
+    const requestBuilder = SEARCH_SUGGESTION_APIS[engineName];
+
+    if (!requestBuilder) {
+        return [];
+    }
+
+    if (searchSuggestionRequestController) {
+        searchSuggestionRequestController.abort();
+    }
+    searchSuggestionRequestController = new AbortController();
+
+    const candidateUrls = requestBuilder(query);
+    for (const url of candidateUrls) {
+        try {
+            const response = await fetch(url, {
+                method: 'GET',
+                signal: searchSuggestionRequestController.signal
+            });
+
+            if (!response.ok) {
+                continue;
+            }
+
+            const rawData = engineName === '百度' ? await response.text() : await response.json();
+            const parsed = parseSuggestionData(engineName, rawData).slice(0, MAX_SEARCH_SUGGESTIONS);
+            if (parsed.length > 0) {
+                return parsed;
+            }
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                throw error;
+            }
+        }
+    }
+
+    const historyFallback = searchHistory
+        .filter(item => item.toLowerCase().includes(query.toLowerCase()))
+        .slice(0, MAX_SEARCH_SUGGESTIONS);
+
+    return historyFallback;
+}
+
+function renderSearchSuggestions() {
+    searchSuggestionsList.innerHTML = '';
+
+    if (searchSuggestions.length === 0) {
+        const emptyElement = document.createElement('div');
+        emptyElement.className = 'search-suggestions-empty';
+        emptyElement.textContent = '暂无联想词';
+        searchSuggestionsList.appendChild(emptyElement);
+        return;
+    }
+
+    searchSuggestions.forEach((term, index) => {
+        const suggestionItem = document.createElement('div');
+        suggestionItem.className = 'search-suggestion-item';
+        if (index === activeSuggestionIndex) {
+            suggestionItem.classList.add('active');
+        }
+        suggestionItem.dataset.term = term;
+
+        const iconElement = document.createElement('div');
+        iconElement.className = 'search-suggestion-item-icon';
+        iconElement.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="m21 21-4.35-4.35"></path>
+            </svg>
+        `;
+
+        const textElement = document.createElement('div');
+        textElement.className = 'search-suggestion-item-text';
+        textElement.textContent = term;
+
+        suggestionItem.appendChild(iconElement);
+        suggestionItem.appendChild(textElement);
+
+        searchSuggestionsList.appendChild(suggestionItem);
+    });
+}
+
+function fetchAndRenderSuggestions(query) {
+    clearTimeout(searchSuggestionDebounceTimer);
+    searchSuggestionDebounceTimer = setTimeout(async () => {
+        try {
+            const suggestions = await fetchSuggestions(query);
+
+            if (document.activeElement !== searchInput || searchInput.value.trim() !== query) {
+                return;
+            }
+
+            searchSuggestions = suggestions;
+            activeSuggestionIndex = -1;
+            renderSearchSuggestions();
+            switchSearchDropdownMode('suggestions');
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                return;
+            }
+            console.error('获取联想词失败:', error);
+            clearSuggestions();
+            renderSearchSuggestions();
+            switchSearchDropdownMode('suggestions');
+        }
+    }, SEARCH_SUGGESTION_DEBOUNCE);
+}
+
+function updateSearchDropdownMode() {
+    clearHideSearchDropdownTimeout();
+
+    if (document.activeElement !== searchInput) {
+        hideAllSearchDropdowns();
+        return;
+    }
+
+    const currentQuery = searchInput.value.trim();
+    if (!currentQuery) {
+        clearSuggestions();
+        showSearchHistory();
+        return;
+    }
+
+    fetchAndRenderSuggestions(currentQuery);
 }
 
 // 打开搜索引擎选择弹窗
@@ -270,21 +944,35 @@ function closeSearchEngineModal() {
 }
 
 // 选择搜索引擎
-function selectSearchEngine(element) {
+function selectSearchEngine(element, options = {}) {
+    const {
+        closeModalAfterSelect = true,
+        showNotificationAfterSelect = true
+    } = options;
     const engineName = element.getAttribute('data-engine');
     const engineUrl = element.getAttribute('data-url');
     
     currentSearchEngineUrl = engineUrl;
     currentEngine.textContent = engineName;
     searchEngineBtn.setAttribute('data-engine', engineName);
+    localStorage.setItem(SEARCH_ENGINE_STORAGE_KEY, engineName);
     
     engineOptions.forEach(option => {
         option.classList.remove('selected');
     });
     element.classList.add('selected');
     
-    closeSearchEngineModal();
-    showNotification(`已切换到 ${engineName}`);
+    if (closeModalAfterSelect) {
+        closeSearchEngineModal();
+    }
+
+    if (document.activeElement === searchInput && searchInput.value.trim()) {
+        fetchAndRenderSuggestions(searchInput.value.trim());
+    }
+
+    if (showNotificationAfterSelect) {
+        showNotification(`已切换到 ${engineName}`);
+    }
 }
 
 // 加载快捷方式
@@ -307,6 +995,14 @@ function loadShortcuts() {
 // 渲染快捷方式
 function renderShortcuts(shortcutsList) {
     shortcuts.innerHTML = '';
+
+    if (!shortcutsList || shortcutsList.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'shortcuts-empty';
+        empty.textContent = '暂无快捷方式，点击右上角 + 添加';
+        shortcuts.appendChild(empty);
+        return;
+    }
     
     shortcutsList.forEach((shortcut, index) => {
         const shortcutElement = createShortcutElement(shortcut, index);
@@ -331,9 +1027,9 @@ function createShortcutElement(shortcut, index) {
     }
     
     if (!domain) {
-        const iconChar = '🌐';
-        icon.innerHTML = `<span style="font-size:24px;">${iconChar}</span>`;
+        setFallbackIcon(icon, '', shortcut.name);
     } else {
+        setFallbackIcon(icon, domain, shortcut.name);
         loadFavicon(icon, domain, shortcut.name);
     }
     
@@ -380,55 +1076,164 @@ function createShortcutElement(shortcut, index) {
 }
 
 // 加载 favicon
-function loadFavicon(iconElement, domain, name) {
-    const faviconSources = [
-        `https://${domain}/favicon.ico`,
-    ];
-    
-    let currentSourceIndex = 0;
-    
+function readFaviconCache() {
+    if (faviconCacheState) {
+        return faviconCacheState;
+    }
+
+    try {
+        const raw = localStorage.getItem(FAVICON_CACHE_KEY);
+        faviconCacheState = raw ? JSON.parse(raw) : {};
+    } catch (error) {
+        faviconCacheState = {};
+    }
+
+    return faviconCacheState;
+}
+
+function writeFaviconCache(cache) {
+    faviconCacheState = cache;
+    localStorage.setItem(FAVICON_CACHE_KEY, JSON.stringify(cache));
+}
+
+function getCachedFavicon(domain) {
+    const cache = readFaviconCache();
+    const item = cache[domain];
+    if (!item) {
+        return { hit: false, url: null };
+    }
+
+    if (!item.expiresAt || item.expiresAt < Date.now()) {
+        delete cache[domain];
+        writeFaviconCache(cache);
+        return { hit: false, url: null };
+    }
+
+    return { hit: true, url: item.url || null };
+}
+
+function setCachedFavicon(domain, url, ttlMs) {
+    const cache = readFaviconCache();
+    cache[domain] = {
+        url: url || null,
+        expiresAt: Date.now() + ttlMs
+    };
+    writeFaviconCache(cache);
+}
+
+function renderIconImage(iconElement, src, name) {
     const img = document.createElement('img');
-    img.alt = name;
+    img.alt = name || 'shortcut icon';
     img.style.width = '32px';
     img.style.height = '32px';
     img.style.objectFit = 'contain';
-    img.style.display = 'none';
-    
-    function tryNextSource() {
-        if (currentSourceIndex >= faviconSources.length) {
-            const iconChar = '🌐';
-            iconElement.innerHTML = `<span style="font-size:24px;">${iconChar}</span>`;
-            return;
-        }
-        
-        const src = faviconSources[currentSourceIndex];
-        img.src = src;
-        
-        const timeout = setTimeout(() => {
-            currentSourceIndex++;
-            tryNextSource();
-        }, 3000);
-        
-        img.onload = function() {
-            clearTimeout(timeout);
-            if (img.naturalWidth > 1 && img.naturalHeight > 1) {
-                img.style.display = 'block';
-                iconElement.innerHTML = '';
-                iconElement.appendChild(img);
-            } else {
-                currentSourceIndex++;
-                tryNextSource();
-            }
-        };
-        
-        img.onerror = function() {
-            clearTimeout(timeout);
-            currentSourceIndex++;
-            tryNextSource();
-        };
+    img.src = src;
+    iconElement.innerHTML = '';
+    iconElement.appendChild(img);
+}
+
+function getFallbackColor(seedText) {
+    let hash = 0;
+    const text = seedText || 'default';
+    for (let i = 0; i < text.length; i++) {
+        hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
     }
-    
-    tryNextSource();
+    const hue = hash % 360;
+    return `hsl(${hue} 62% 45%)`;
+}
+
+function buildFallbackIconDataUrl(domain, name) {
+    const source = (name || domain || '?').trim();
+    const firstChar = source.charAt(0).toUpperCase();
+    const color = getFallbackColor(domain || source);
+    const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <rect x="0" y="0" width="64" height="64" rx="14" fill="${color}"/>
+  <text x="32" y="42" text-anchor="middle" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700">${firstChar || '?'}</text>
+</svg>`;
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function setFallbackIcon(iconElement, domain, name) {
+    renderIconImage(iconElement, buildFallbackIconDataUrl(domain, name), name);
+}
+
+function buildFaviconSources(domain) {
+    const cleanDomain = domain.toLowerCase().trim();
+    const hostCandidates = [cleanDomain];
+    if (!cleanDomain.startsWith('www.')) {
+        hostCandidates.push(`www.${cleanDomain}`);
+    }
+
+    const pathCandidates = [
+        '/favicon.ico',
+        '/favicon.png',
+        '/apple-touch-icon.png',
+        '/apple-touch-icon-precomposed.png'
+    ];
+
+    const result = [];
+    hostCandidates.forEach((host) => {
+        pathCandidates.forEach((path) => {
+            result.push(`https://${host}${path}`);
+        });
+    });
+
+    return result;
+}
+
+function testFaviconSource(src, timeoutMs = 2500) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        let finished = false;
+        const done = (cb) => {
+            if (finished) {
+                return;
+            }
+            finished = true;
+            clearTimeout(timerId);
+            cb();
+        };
+
+        const timerId = setTimeout(() => {
+            done(() => reject(new Error('图标加载超时')));
+        }, timeoutMs);
+
+        img.onload = () => {
+            done(() => {
+                if (img.naturalWidth > 1 && img.naturalHeight > 1) {
+                    resolve(src);
+                    return;
+                }
+                reject(new Error('图标尺寸无效'));
+            });
+        };
+        img.onerror = () => done(() => reject(new Error('图标加载失败')));
+        img.src = src;
+    });
+}
+
+async function loadFavicon(iconElement, domain, name) {
+    const cached = getCachedFavicon(domain);
+    if (cached.hit) {
+        if (cached.url) {
+            renderIconImage(iconElement, cached.url, name);
+        }
+        return;
+    }
+
+    const sources = buildFaviconSources(domain);
+    for (const src of sources) {
+        try {
+            const loadedSrc = await testFaviconSource(src);
+            renderIconImage(iconElement, loadedSrc, name);
+            setCachedFavicon(domain, loadedSrc, FAVICON_CACHE_SUCCESS_TTL);
+            return;
+        } catch (error) {
+        }
+    }
+
+    setCachedFavicon(domain, null, FAVICON_CACHE_FAILURE_TTL);
 }
 
 // 添加快捷方式
@@ -595,39 +1400,27 @@ function toggleSearchHistory() {
     searchHistoryEnabled = searchHistorySwitch.checked;
     localStorage.setItem('searchHistoryEnabled', searchHistoryEnabled);
     
-    if (!searchHistoryEnabled) {
-        searchHistoryDropdown.classList.remove('active');
-    }
+    updateSearchDropdownMode();
     
     showNotification(searchHistoryEnabled ? '将记录搜索历史' : '不再记录搜索历史');
 }
 
 // 显示搜索历史记录
 function showSearchHistory() {
-    if (!searchHistoryEnabled) {
+    if (!searchHistoryEnabled || searchInput.value.trim() !== '') {
         return;
     }
     
-    if (hideSearchHistoryTimeout) {
-        clearTimeout(hideSearchHistoryTimeout);
-        hideSearchHistoryTimeout = null;
-    }
+    clearHideSearchDropdownTimeout();
     
     if (document.activeElement === searchInput) {
-        searchHistoryDropdown.classList.add('active');
+        switchSearchDropdownMode('history');
     }
 }
 
 // 隐藏搜索历史记录
 function hideSearchHistory() {
-    if (hideSearchHistoryTimeout) {
-        clearTimeout(hideSearchHistoryTimeout);
-        hideSearchHistoryTimeout = null;
-    }
-    
-    if (document.activeElement !== searchInput) {
-        searchHistoryDropdown.classList.remove('active');
-    }
+    hideSearchDropdown();
 }
 
 // 添加搜索历史记录
@@ -741,7 +1534,7 @@ function initSearchHistoryEvents() {
             
             setTimeout(() => {
                 renderSearchHistory();
-                searchHistoryDropdown.classList.add('active');
+                updateSearchDropdownMode();
             }, 100);
         } else if (e.target.closest('.search-history-item-delete')) {
             e.stopPropagation();
