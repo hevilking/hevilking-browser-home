@@ -35,6 +35,9 @@ const addShortcutBtn = document.getElementById('addShortcutBtn');
 const dragHintBtn = document.getElementById('dragHintBtn');
 const copyShortcutMetaBtn = document.getElementById('copyShortcutMetaBtn');
 const importShortcutMetaBtn = document.getElementById('importShortcutMetaBtn');
+const shortcutSearchBtn = document.getElementById('shortcutSearchBtn');
+const shortcutSearchWrapper = document.getElementById('shortcutSearchWrapper');
+const shortcutSearchInput = document.getElementById('shortcutSearchInput');
 const addShortcutModal = document.getElementById('addShortcutModal');
 const closeModal = document.getElementById('closeModal');
 const shortcutForm = document.getElementById('shortcutForm');
@@ -63,7 +66,7 @@ const searchSuggestionsList = document.getElementById('searchSuggestionsList');
 let currentSearchEngineUrl = 'https://cn.bing.com/search?q=';
 
 // 搜索历史记录相关变量
-const MAX_SEARCH_HISTORY = 5;
+const MAX_SEARCH_HISTORY = 6; // 搜索历史上限
 let searchHistoryEnabled = localStorage.getItem('searchHistoryEnabled') !== 'false';
 let searchHistory = JSON.parse(localStorage.getItem('searchHistory')) || [];
 let hideSearchHistoryTimeout = null;
@@ -80,6 +83,11 @@ const FAVICON_CACHE_KEY = 'shortcutFaviconCacheV2';
 const FAVICON_CACHE_SUCCESS_TTL = 7 * 24 * 60 * 60 * 1000;
 const FAVICON_CACHE_FAILURE_TTL = 24 * 60 * 60 * 1000;
 let faviconCacheState = null;
+
+// 快捷方式搜索相关
+const SHORTCUT_SEARCH_AUTO_COLLAPSE_MS = 5000;
+let allShortcuts = [];
+let shortcutSearchCollapseTimer = null;
 
 const SEARCH_SUGGESTION_APIS = {
     Bing: (query) => [
@@ -267,6 +275,21 @@ function setupEventListeners() {
     });
     copyShortcutMetaBtn.addEventListener('click', copyShortcutsMetadata);
     importShortcutMetaBtn.addEventListener('click', importShortcutsMetadata);
+
+    // 快捷方式搜索
+    shortcutSearchBtn.addEventListener('click', toggleShortcutSearch);
+    shortcutSearchInput.addEventListener('input', handleShortcutSearchInput);
+    shortcutSearchInput.addEventListener('focus', () => {
+        if (shortcutSearchCollapseTimer) {
+            clearTimeout(shortcutSearchCollapseTimer);
+            shortcutSearchCollapseTimer = null;
+        }
+    });
+    shortcutSearchInput.addEventListener('blur', () => {
+        if (!shortcutSearchInput.value.trim()) {
+            startShortcutSearchCollapseTimer();
+        }
+    });
     
     closeModal.addEventListener('click', () => {
         addShortcutModal.classList.remove('active');
@@ -555,6 +578,30 @@ function normalizeShortcutUrl(url) {
     return formatted;
 }
 
+// 检查快捷方式列表中是否已存在相同URL，返回重复项（编辑时排除自身索引）
+function findDuplicateByUrl(shortcutsList, url, excludeIndex = -1) {
+    const normalized = normalizeShortcutUrl(url);
+    if (!normalized) return null;
+
+    try {
+        const targetUrl = new URL(normalized);
+        const targetKey = `${targetUrl.hostname}${targetUrl.pathname.replace(/\/+$/, '')}`;
+
+        return shortcutsList.find((item, index) => {
+            if (index === excludeIndex) return false;
+            try {
+                const itemUrl = new URL(normalizeShortcutUrl(item.url));
+                const itemKey = `${itemUrl.hostname}${itemUrl.pathname.replace(/\/+$/, '')}`;
+                return itemKey === targetKey;
+            } catch {
+                return false;
+            }
+        });
+    } catch {
+        return null;
+    }
+}
+
 function normalizeShortcutItem(item) {
     if (!item || typeof item !== 'object') {
         return null;
@@ -645,18 +692,26 @@ function importShortcutsMetadata() {
 
     const current = getSavedShortcuts();
     const merged = [...current];
-    const existingSet = new Set(current.map((item) => `${item.name}@@${item.url}`));
+    let skipped = 0;
 
     importedShortcuts.forEach((item) => {
-        const key = `${item.name}@@${item.url}`;
-        if (!existingSet.has(key)) {
-            existingSet.add(key);
-            merged.push(item);
+        // URL重复检测（复用统一的归一化比较逻辑）
+        if (findDuplicateByUrl(current, item.url)) {
+            skipped++;
+            return;
         }
+        if (findDuplicateByUrl(merged, item.url)) {
+            skipped++;
+            return;
+        }
+        merged.push(item);
     });
 
     saveAndRenderShortcuts(merged);
-    showNotification(`导入完成，新增 ${merged.length - current.length} 个快捷方式`);
+    const added = merged.length - current.length;
+    showNotification(added > 0
+        ? `导入完成，新增 ${added} 个快捷方式`
+        : `导入完成，${skipped} 个快捷方式已存在，无新增`);
 }
 
 // 执行搜索
@@ -885,6 +940,12 @@ function renderSearchSuggestions() {
 
         searchSuggestionsList.appendChild(suggestionItem);
     });
+
+    // 键盘导航时自动滚动到当前选中项
+    const activeItem = searchSuggestionsList.querySelector('.search-suggestion-item.active');
+    if (activeItem) {
+        activeItem.scrollIntoView({ block: 'nearest' });
+    }
 }
 
 function fetchAndRenderSuggestions(query) {
@@ -988,7 +1049,8 @@ function loadShortcuts() {
     if (!localStorage.getItem('shortcuts')) {
         localStorage.setItem('shortcuts', JSON.stringify(defaultShortcuts));
     }
-    
+
+    allShortcuts = savedShortcuts;
     renderShortcuts(savedShortcuts);
 }
 
@@ -1240,16 +1302,23 @@ async function loadFavicon(iconElement, domain, name) {
 function addShortcut() {
     const name = shortcutName.value.trim();
     const url = shortcutUrl.value.trim();
-    
+
     if (name && url) {
         const formattedUrl = url.startsWith('http') ? url : 'https://' + url;
-        
+
         const shortcutsList = JSON.parse(localStorage.getItem('shortcuts')) || [];
-        
+
+        // URL重复检测
+        const duplicate = findDuplicateByUrl(shortcutsList, formattedUrl);
+        if (duplicate) {
+            showNotification(`该网址已存在快捷方式「${duplicate.name}」`);
+            return;
+        }
+
         shortcutsList.push({ name, url: formattedUrl });
-        
+
         saveAndRenderShortcuts(shortcutsList);
-        
+
         addShortcutModal.classList.remove('active');
         shortcutForm.reset();
     }
@@ -1277,21 +1346,28 @@ function editShortcut(index) {
 function saveEditedShortcut() {
     const name = shortcutName.value.trim();
     const url = shortcutUrl.value.trim();
-    
+
     if (name && url) {
         const formattedUrl = url.startsWith('http') ? url : 'https://' + url;
-        
+
         const shortcutsList = JSON.parse(localStorage.getItem('shortcuts')) || [];
-        
+
+        // URL重复检测（排除当前正在编辑的项自身）
+        const duplicate = findDuplicateByUrl(shortcutsList, formattedUrl, editingIndex);
+        if (duplicate) {
+            showNotification(`该网址已存在快捷方式「${duplicate.name}」`);
+            return;
+        }
+
         shortcutsList[editingIndex] = { name, url: formattedUrl };
-        
+
         saveAndRenderShortcuts(shortcutsList);
-        
+
         editingIndex = -1;
-        
+
         addShortcutModal.classList.remove('active');
         shortcutForm.reset();
-        
+
         modalTitle.textContent = '添加快捷方式';
         submitBtn.textContent = '添加快捷方式';
     }
@@ -1308,8 +1384,77 @@ function deleteShortcut(index) {
 
 // 保存快捷方式到localStorage并重新渲染
 function saveAndRenderShortcuts(shortcutsList) {
+    allShortcuts = shortcutsList;
     localStorage.setItem('shortcuts', JSON.stringify(shortcutsList));
+    clearShortcutSearch();
     renderShortcuts(shortcutsList);
+}
+
+// 清除快捷方式搜索状态
+function clearShortcutSearch() {
+    if (shortcutSearchCollapseTimer) {
+        clearTimeout(shortcutSearchCollapseTimer);
+        shortcutSearchCollapseTimer = null;
+    }
+    shortcutSearchInput.value = '';
+    shortcutSearchWrapper.classList.remove('active');
+}
+
+// 启动快捷方式搜索自动收回计时器
+function startShortcutSearchCollapseTimer() {
+    if (shortcutSearchCollapseTimer) {
+        clearTimeout(shortcutSearchCollapseTimer);
+    }
+    shortcutSearchCollapseTimer = setTimeout(() => {
+        if (!shortcutSearchInput.value.trim()) {
+            clearShortcutSearch();
+            renderShortcuts(allShortcuts);
+        }
+    }, SHORTCUT_SEARCH_AUTO_COLLAPSE_MS);
+}
+
+// 切换快捷方式搜索展开/收起
+function toggleShortcutSearch() {
+    if (shortcutSearchWrapper.classList.contains('active')) {
+        // 收起
+        clearShortcutSearch();
+        renderShortcuts(allShortcuts);
+    } else {
+        // 展开
+        shortcutSearchWrapper.classList.add('active');
+        shortcutSearchInput.focus();
+        startShortcutSearchCollapseTimer();
+    }
+}
+
+// 处理快捷方式搜索输入
+function handleShortcutSearchInput() {
+    // 重置自动收回计时器
+    if (shortcutSearchCollapseTimer) {
+        clearTimeout(shortcutSearchCollapseTimer);
+        shortcutSearchCollapseTimer = null;
+    }
+
+    const term = shortcutSearchInput.value.trim().toLowerCase();
+
+    // 输入为空时显示全部
+    if (!term) {
+        renderShortcuts(allShortcuts);
+        startShortcutSearchCollapseTimer();
+        return;
+    }
+
+    // 模糊匹配：同时比对名称和URL
+    const filtered = allShortcuts.filter((item) => {
+        return item.name.toLowerCase().includes(term) || item.url.toLowerCase().includes(term);
+    });
+
+    renderShortcuts(filtered);
+
+    // 无匹配结果时提示
+    if (filtered.length === 0) {
+        showNotification('未找到匹配的快捷方式');
+    }
 }
 
 // 拖拽功能相关变量
