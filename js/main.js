@@ -1,4 +1,8 @@
 import { initBackgroundSystem } from './background/index.js';
+import { ensureShortcutIds, orderShortcuts } from './shortcuts/data.js';
+import { createShortcutSorter } from './shortcuts/sortable.js';
+import { createShortcutSortHelp } from './shortcuts/sort-help.js';
+import { createSearchEnginePicker } from './search/engine-picker.js';
 
 // DOM元素
 const wallpaperSwitch = document.getElementById('wallpaperSwitch');
@@ -38,6 +42,15 @@ const importShortcutMetaBtn = document.getElementById('importShortcutMetaBtn');
 const shortcutSearchBtn = document.getElementById('shortcutSearchBtn');
 const shortcutSearchWrapper = document.getElementById('shortcutSearchWrapper');
 const shortcutSearchInput = document.getElementById('shortcutSearchInput');
+const shortcutSortFeedback = document.getElementById('shortcutSortFeedback');
+const shortcutSortDescription = document.getElementById('shortcutSortDescription');
+const shortcutSortHelp = document.getElementById('shortcutSortHelp');
+const shortcutSortHelpTitle = document.getElementById('shortcutSortHelpTitle');
+const shortcutSortHelpPointer = document.getElementById('shortcutSortHelpPointer');
+const shortcutSortStatus = document.getElementById('shortcutSortStatus');
+const clearShortcutSearchBtn = document.getElementById('clearShortcutSearchBtn');
+const shortcutSortUndo = document.getElementById('shortcutSortUndo');
+const undoShortcutSortBtn = document.getElementById('undoShortcutSortBtn');
 const addShortcutModal = document.getElementById('addShortcutModal');
 const closeModal = document.getElementById('closeModal');
 const shortcutForm = document.getElementById('shortcutForm');
@@ -46,13 +59,14 @@ const shortcutUrl = document.getElementById('shortcutUrl');
 const modalTitle = document.getElementById('modalTitle');
 const submitBtn = document.getElementById('submitBtn');
 
-// 搜索引擎选择弹窗元素
+// 搜索引擎下拉选择元素
+const searchEnginePickerElement = document.getElementById('searchEnginePicker');
 const searchEngineBtn = document.getElementById('searchEngineBtn');
 const currentEngine = document.getElementById('currentEngine');
-const searchEngineModal = document.getElementById('searchEngineModal');
-const modalBackdrop = document.getElementById('modalBackdrop');
-const closeSearchModal = document.getElementById('closeSearchModal');
-let engineOptions;
+const currentEngineIcon = document.getElementById('currentEngineIcon');
+const searchEngineDropdown = document.getElementById('searchEngineDropdown');
+const engineOptions = Array.from(searchEngineDropdown.querySelectorAll('.engine-option'));
+let searchEnginePicker = null;
 
 // 搜索历史记录相关元素
 const searchHistorySwitch = document.getElementById('searchHistorySwitch');
@@ -73,6 +87,7 @@ let hideSearchHistoryTimeout = null;
 let searchDropdownMode = 'hidden';
 let searchSuggestionDebounceTimer = null;
 let searchSuggestionRequestController = null;
+let searchSuggestionRequestVersion = 0;
 let activeSuggestionIndex = -1;
 let searchSuggestions = [];
 
@@ -88,6 +103,11 @@ let faviconCacheState = null;
 const SHORTCUT_SEARCH_AUTO_COLLAPSE_MS = 5000;
 let allShortcuts = [];
 let shortcutSearchCollapseTimer = null;
+let shortcutSorter = null;
+let shortcutSortHelpController = null;
+let shortcutSortState = { active: false };
+let shortcutUndoState = null;
+let shortcutUndoTimer = null;
 
 const SEARCH_SUGGESTION_APIS = {
     Bing: (query) => [
@@ -110,7 +130,7 @@ const DEFAULT_SEARCH_ENGINE = 'Bing';
 const SEARCH_ENGINE_STORAGE_KEY = 'defaultSearchEngine';
 
 // 编辑模式相关变量
-let editingIndex = -1;
+let editingShortcutId = null;
 let backgroundController = null;
 
 // 默认快捷方式
@@ -123,9 +143,25 @@ const defaultShortcuts = [
 
 // 初始化页面
 document.addEventListener('DOMContentLoaded', function() {
-    engineOptions = document.querySelectorAll('.engine-option');
     initSearchEngine();
     loadShortcuts();
+    shortcutSorter = createShortcutSorter({
+        container: shortcuts,
+        isEnabled: () => !shortcutSearchInput.value.trim(),
+        onCommit: commitShortcutOrder,
+        onStateChange: (state) => {
+            shortcutSortState = state;
+            if (state.active) {
+                shortcutSortHelpController?.close();
+                clearTimeout(shortcutSearchCollapseTimer);
+                shortcutSearchCollapseTimer = null;
+            } else if (shortcutSearchWrapper.classList.contains('active') && !shortcutSearchInput.value.trim()) {
+                startShortcutSearchCollapseTimer();
+            }
+            updateShortcutSortControls();
+        },
+        announce: (message) => { shortcutSortStatus.textContent = message; }
+    });
     initSearchHistory();
     setupEventListeners();
     initBackgroundEngine();
@@ -133,17 +169,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function initSearchEngine() {
     const savedEngineName = localStorage.getItem(SEARCH_ENGINE_STORAGE_KEY) || DEFAULT_SEARCH_ENGINE;
-    const savedEngineOption = Array.from(engineOptions).find(option => option.getAttribute('data-engine') === savedEngineName);
-    const fallbackEngineOption = Array.from(engineOptions).find(option => option.getAttribute('data-engine') === DEFAULT_SEARCH_ENGINE);
-    const selectedOption = savedEngineOption || fallbackEngineOption;
-
-    if (selectedOption) {
-        selectSearchEngine(selectedOption, { closeModalAfterSelect: false, showNotificationAfterSelect: false });
-        return;
-    }
-
-    currentEngine.textContent = DEFAULT_SEARCH_ENGINE;
-    searchEngineBtn.setAttribute('data-engine', DEFAULT_SEARCH_ENGINE);
+    const selectedOption = engineOptions.find(option => option.dataset.engine === savedEngineName)
+        || engineOptions.find(option => option.dataset.engine === DEFAULT_SEARCH_ENGINE);
+    selectSearchEngine(selectedOption, { persist: false });
 }
 
 // 设置随机壁纸
@@ -194,7 +222,10 @@ function setupEventListeners() {
     
     searchHistorySwitch.addEventListener('change', toggleSearchHistory);
     
-    searchInput.addEventListener('focus', updateSearchDropdownMode);
+    searchInput.addEventListener('focus', () => {
+        searchEnginePicker?.close();
+        updateSearchDropdownMode();
+    });
     searchInput.addEventListener('blur', function() {
         hideSearchHistoryTimeout = setTimeout(hideSearchDropdown, 300);
     });
@@ -256,22 +287,44 @@ function setupEventListeners() {
     
     clearHistoryBtn.addEventListener('click', clearSearchHistory);
     
-    searchEngineBtn.addEventListener('click', openSearchEngineModal);
-    
-    closeSearchModal.addEventListener('click', closeSearchEngineModal);
-    modalBackdrop.addEventListener('click', closeSearchEngineModal);
-    
-    engineOptions.forEach(option => {
-        option.addEventListener('click', function() {
-            selectSearchEngine(this);
-        });
+    searchEnginePicker = createSearchEnginePicker({
+        container: searchEnginePickerElement,
+        trigger: searchEngineBtn,
+        menu: searchEngineDropdown,
+        input: searchInput,
+        onOpen: () => {
+            cancelSearchSuggestionRequest();
+            clearHideSearchDropdownTimeout();
+            clearSuggestions();
+            hideAllSearchDropdowns();
+        },
+        onSelect: selectSearchEngine
     });
     
     addShortcutBtn.addEventListener('click', () => {
         addShortcutModal.classList.add('active');
     });
-    dragHintBtn.addEventListener('click', () => {
-        showNotification('拖拽快捷方式到目标卡片上可以重新排序');
+    shortcutSortHelpController = createShortcutSortHelp({
+        trigger: dragHintBtn,
+        popup: shortcutSortHelp,
+        isSorting: () => shortcutSortState.active
+    });
+    clearShortcutSearchBtn.addEventListener('click', () => {
+        clearShortcutSearch();
+        renderShortcuts(allShortcuts);
+        shortcutSearchBtn.focus();
+    });
+    undoShortcutSortBtn.addEventListener('click', undoShortcutOrder);
+    shortcutSortUndo.addEventListener('mouseenter', () => clearTimeout(shortcutUndoTimer));
+    shortcutSortUndo.addEventListener('focusin', () => clearTimeout(shortcutUndoTimer));
+    shortcutSortUndo.addEventListener('mouseleave', scheduleShortcutUndoExpiry);
+    shortcutSortUndo.addEventListener('focusout', scheduleShortcutUndoExpiry);
+    window.addEventListener('storage', (event) => {
+        if (event.key !== 'shortcuts' && event.key !== null) return;
+        shortcutSorter.cancel();
+        dismissShortcutUndo();
+        allShortcuts = getSavedShortcuts();
+        renderVisibleShortcuts();
     });
     copyShortcutMetaBtn.addEventListener('click', copyShortcutsMetadata);
     importShortcutMetaBtn.addEventListener('click', importShortcutsMetadata);
@@ -294,7 +347,7 @@ function setupEventListeners() {
     closeModal.addEventListener('click', () => {
         addShortcutModal.classList.remove('active');
         shortcutForm.reset();
-        editingIndex = -1;
+        editingShortcutId = null;
         modalTitle.textContent = '添加快捷方式';
         submitBtn.textContent = '添加快捷方式';
     });
@@ -303,7 +356,7 @@ function setupEventListeners() {
         if (e.target === addShortcutModal) {
             addShortcutModal.classList.remove('active');
             shortcutForm.reset();
-            editingIndex = -1;
+            editingShortcutId = null;
             modalTitle.textContent = '添加快捷方式';
             submitBtn.textContent = '添加快捷方式';
         }
@@ -315,7 +368,7 @@ function setupEventListeners() {
     
     shortcutForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        if (editingIndex >= 0) {
+        if (editingShortcutId) {
             saveEditedShortcut();
         } else {
             addShortcut();
@@ -556,16 +609,18 @@ function showNotification(message) {
 
 function getSavedShortcuts() {
     const raw = localStorage.getItem('shortcuts');
-    if (!raw) {
-        return [...defaultShortcuts];
-    }
-
+    let items = defaultShortcuts;
     try {
         const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [...defaultShortcuts];
-    } catch (error) {
-        return [...defaultShortcuts];
+        if (Array.isArray(parsed)) items = parsed;
+    } catch {
+        // 存储内容损坏时恢复默认列表，随后补齐稳定标识。
     }
+    const normalized = ensureShortcutIds(items);
+    if (raw !== JSON.stringify(normalized)) {
+        persistShortcuts(normalized);
+    }
+    return normalized;
 }
 
 function normalizeShortcutUrl(url) {
@@ -578,8 +633,8 @@ function normalizeShortcutUrl(url) {
     return formatted;
 }
 
-// 检查快捷方式列表中是否已存在相同URL，返回重复项（编辑时排除自身索引）
-function findDuplicateByUrl(shortcutsList, url, excludeIndex = -1) {
+// 检查重复网址；编辑时按稳定标识排除当前快捷方式。
+function findDuplicateByUrl(shortcutsList, url, excludeId = null) {
     const normalized = normalizeShortcutUrl(url);
     if (!normalized) return null;
 
@@ -587,8 +642,8 @@ function findDuplicateByUrl(shortcutsList, url, excludeIndex = -1) {
         const targetUrl = new URL(normalized);
         const targetKey = `${targetUrl.hostname}${targetUrl.pathname.replace(/\/+$/, '')}`;
 
-        return shortcutsList.find((item, index) => {
-            if (index === excludeIndex) return false;
+        return shortcutsList.find((item) => {
+            if (item.id === excludeId) return false;
             try {
                 const itemUrl = new URL(normalizeShortcutUrl(item.url));
                 const itemKey = `${itemUrl.hostname}${itemUrl.pathname.replace(/\/+$/, '')}`;
@@ -707,7 +762,7 @@ function importShortcutsMetadata() {
         merged.push(item);
     });
 
-    saveAndRenderShortcuts(merged);
+    if (!saveAndRenderShortcuts(merged)) return;
     const added = merged.length - current.length;
     showNotification(added > 0
         ? `导入完成，新增 ${added} 个快捷方式`
@@ -743,6 +798,14 @@ function clearSuggestions() {
     searchSuggestionsList.innerHTML = '';
 }
 
+function cancelSearchSuggestionRequest() {
+    clearTimeout(searchSuggestionDebounceTimer);
+    searchSuggestionDebounceTimer = null;
+    searchSuggestionRequestController?.abort();
+    searchSuggestionRequestController = null;
+    searchSuggestionRequestVersion++;
+}
+
 function hideAllSearchDropdowns() {
     searchHistoryDropdown.classList.remove('active');
     searchSuggestionsDropdown.classList.remove('active');
@@ -750,6 +813,10 @@ function hideAllSearchDropdowns() {
 }
 
 function switchSearchDropdownMode(mode) {
+    if (searchEnginePicker?.isOpen()) {
+        hideAllSearchDropdowns();
+        return;
+    }
     searchDropdownMode = mode;
 
     if (mode === 'history') {
@@ -838,46 +905,38 @@ function parseSuggestionData(engineName, rawData) {
     }
 
     if (engineName === '百度') {
-        if (rawData && typeof rawData === 'object' && Array.isArray(rawData.g)) {
-            return rawData.g.map(item => item && item.q).filter(Boolean);
+        let parsed = rawData;
+        if (typeof rawData === 'string') {
+            const responseText = rawData.trim();
+            const match = responseText.match(/^baiduSuggestionCallback\(([\s\S]*)\);?$/);
+            try {
+                // 兼容 JSON 和 JSONP 数据，不执行响应中的代码。
+                parsed = JSON.parse(match ? match[1] : responseText);
+            } catch {
+                return [];
+            }
         }
-
-        const responseText = typeof rawData === 'string' ? rawData : '';
-        const match = responseText.match(/baiduSuggestionCallback\((.*)\);?$/);
-        if (!match || !match[1]) {
-            return [];
-        }
-
-        const parsed = Function(`"use strict"; return (${match[1]});`)();
-        if (!parsed || !Array.isArray(parsed.s)) {
-            return [];
-        }
-
-        return parsed.s.filter(Boolean);
+        if (Array.isArray(parsed?.g)) return parsed.g.map(item => item?.q).filter(Boolean);
+        if (Array.isArray(parsed?.s)) return parsed.s.filter(Boolean);
     }
 
     return [];
 }
 
-async function fetchSuggestions(query) {
-    const engineName = getCurrentEngineName();
+async function fetchSuggestions(query, engineName, signal) {
     const requestBuilder = SEARCH_SUGGESTION_APIS[engineName];
 
     if (!requestBuilder) {
         return [];
     }
 
-    if (searchSuggestionRequestController) {
-        searchSuggestionRequestController.abort();
-    }
-    searchSuggestionRequestController = new AbortController();
-
     const candidateUrls = requestBuilder(query);
     for (const url of candidateUrls) {
         try {
+            signal.throwIfAborted();
             const response = await fetch(url, {
                 method: 'GET',
-                signal: searchSuggestionRequestController.signal
+                signal
             });
 
             if (!response.ok) {
@@ -896,6 +955,7 @@ async function fetchSuggestions(query) {
         }
     }
 
+    signal.throwIfAborted();
     const historyFallback = searchHistory
         .filter(item => item.toLowerCase().includes(query.toLowerCase()))
         .slice(0, MAX_SEARCH_SUGGESTIONS);
@@ -949,27 +1009,36 @@ function renderSearchSuggestions() {
 }
 
 function fetchAndRenderSuggestions(query) {
-    clearTimeout(searchSuggestionDebounceTimer);
-    searchSuggestionDebounceTimer = setTimeout(async () => {
-        try {
-            const suggestions = await fetchSuggestions(query);
+    cancelSearchSuggestionRequest();
+    const version = searchSuggestionRequestVersion;
+    const engineName = getCurrentEngineName();
+    const controller = new AbortController();
+    searchSuggestionRequestController = controller;
+    const isCurrentRequest = () => !controller.signal.aborted && version === searchSuggestionRequestVersion
+        && engineName === getCurrentEngineName() && document.activeElement === searchInput
+        && searchInput.value.trim() === query && !searchEnginePicker?.isOpen();
 
-            if (document.activeElement !== searchInput || searchInput.value.trim() !== query) {
-                return;
-            }
+    searchSuggestionDebounceTimer = setTimeout(async () => {
+        if (!isCurrentRequest()) return;
+        searchSuggestionDebounceTimer = null;
+        try {
+            const suggestions = await fetchSuggestions(query, engineName, controller.signal);
+            if (!isCurrentRequest()) return;
 
             searchSuggestions = suggestions;
             activeSuggestionIndex = -1;
             renderSearchSuggestions();
             switchSearchDropdownMode('suggestions');
         } catch (error) {
-            if (error.name === 'AbortError') {
+            if (error.name === 'AbortError' || !isCurrentRequest()) {
                 return;
             }
             console.error('获取联想词失败:', error);
             clearSuggestions();
             renderSearchSuggestions();
             switchSearchDropdownMode('suggestions');
+        } finally {
+            if (searchSuggestionRequestController === controller) searchSuggestionRequestController = null;
         }
     }, SEARCH_SUGGESTION_DEBOUNCE);
 }
@@ -978,12 +1047,14 @@ function updateSearchDropdownMode() {
     clearHideSearchDropdownTimeout();
 
     if (document.activeElement !== searchInput) {
+        cancelSearchSuggestionRequest();
         hideAllSearchDropdowns();
         return;
     }
 
     const currentQuery = searchInput.value.trim();
     if (!currentQuery) {
+        cancelSearchSuggestionRequest();
         clearSuggestions();
         showSearchHistory();
         return;
@@ -992,92 +1063,76 @@ function updateSearchDropdownMode() {
     fetchAndRenderSuggestions(currentQuery);
 }
 
-// 打开搜索引擎选择弹窗
-function openSearchEngineModal() {
-    searchEngineModal.classList.add('active');
-    document.body.style.overflow = 'hidden';
-}
-
-// 关闭搜索引擎选择弹窗
-function closeSearchEngineModal() {
-    searchEngineModal.classList.remove('active');
-    document.body.style.overflow = '';
-}
-
-// 选择搜索引擎
-function selectSearchEngine(element, options = {}) {
-    const {
-        closeModalAfterSelect = true,
-        showNotificationAfterSelect = true
-    } = options;
-    const engineName = element.getAttribute('data-engine');
-    const engineUrl = element.getAttribute('data-url');
-    
-    currentSearchEngineUrl = engineUrl;
+// 选择即生效；保留现有存储键，以兼容已保存的默认引擎。
+function selectSearchEngine(element, { persist = true } = {}) {
+    cancelSearchSuggestionRequest();
+    const engineName = element.dataset.engine;
+    currentSearchEngineUrl = element.dataset.url;
     currentEngine.textContent = engineName;
-    searchEngineBtn.setAttribute('data-engine', engineName);
-    localStorage.setItem(SEARCH_ENGINE_STORAGE_KEY, engineName);
-    
+    currentEngineIcon.replaceChildren(element.querySelector('.engine-icon svg').cloneNode(true));
+    searchEngineBtn.dataset.engine = engineName;
+    searchEngineBtn.setAttribute('aria-label', `搜索引擎：${engineName}`);
+    searchEngineBtn.title = engineName;
     engineOptions.forEach(option => {
-        option.classList.remove('selected');
+        option.setAttribute('aria-selected', String(option === element));
+        option.tabIndex = option === element ? 0 : -1;
     });
-    element.classList.add('selected');
-    
-    if (closeModalAfterSelect) {
-        closeSearchEngineModal();
-    }
-
-    if (document.activeElement === searchInput && searchInput.value.trim()) {
-        fetchAndRenderSuggestions(searchInput.value.trim());
-    }
-
-    if (showNotificationAfterSelect) {
-        showNotification(`已切换到 ${engineName}`);
+    if (persist) {
+        try {
+            localStorage.setItem(SEARCH_ENGINE_STORAGE_KEY, engineName);
+        } catch {
+            showNotification('搜索引擎已切换，但暂时无法保存默认设置');
+        }
     }
 }
 
 // 加载快捷方式
 function loadShortcuts() {
-    let savedShortcuts = localStorage.getItem('shortcuts');
-    
-    try {
-        savedShortcuts = savedShortcuts ? JSON.parse(savedShortcuts) : defaultShortcuts;
-    } catch (e) {
-        savedShortcuts = defaultShortcuts;
-    }
-    
-    if (!localStorage.getItem('shortcuts')) {
-        localStorage.setItem('shortcuts', JSON.stringify(defaultShortcuts));
-    }
-
-    allShortcuts = savedShortcuts;
-    renderShortcuts(savedShortcuts);
+    allShortcuts = getSavedShortcuts();
+    renderShortcuts(allShortcuts);
 }
 
-// 渲染快捷方式
+// 按标识复用卡片，保留图标、滚动位置以及未变化卡片的焦点。
 function renderShortcuts(shortcutsList) {
-    shortcuts.innerHTML = '';
+    shortcutSorter?.cancel();
+    const existing = new Map(Array.from(shortcuts.children).map(item => [item.dataset.shortcutId, item]));
+    const nodes = shortcutsList.map(shortcut => {
+        const item = existing.get(shortcut.id);
+        if (item?.querySelector('.shortcut-link')?.getAttribute('href') === shortcut.url
+            && item.querySelector('.shortcut-name').textContent === shortcut.name) return item;
+        return createShortcutElement(shortcut);
+    });
 
-    if (!shortcutsList || shortcutsList.length === 0) {
+    if (!nodes.length) {
         const empty = document.createElement('div');
         empty.className = 'shortcuts-empty';
-        empty.textContent = '暂无快捷方式，点击右上角 + 添加';
-        shortcuts.appendChild(empty);
-        return;
+        empty.textContent = shortcutSearchInput.value.trim() ? '没有匹配的快捷方式' : '暂无快捷方式，点击右上角 + 添加';
+        nodes.push(empty);
     }
-    
-    shortcutsList.forEach((shortcut, index) => {
-        const shortcutElement = createShortcutElement(shortcut, index);
-        shortcuts.appendChild(shortcutElement);
+
+    const retained = new Set(nodes);
+    Array.from(shortcuts.children).forEach(item => { if (!retained.has(item)) item.remove(); });
+    nodes.forEach((item, index) => {
+        if (shortcuts.children[index] !== item) shortcuts.insertBefore(item, shortcuts.children[index] || null);
     });
+    shortcutSorter?.refresh();
+    updateShortcutSortControls();
 }
 
 // 创建快捷方式元素
-function createShortcutElement(shortcut, index) {
+function createShortcutElement(shortcut) {
     const div = document.createElement('div');
     div.className = 'shortcut';
-    div.draggable = true;
-    div.dataset.index = index;
+    div.dataset.shortcutId = shortcut.id;
+    div.setAttribute('role', 'listitem');
+    const link = document.createElement('a');
+    link.className = 'shortcut-link';
+    link.href = shortcut.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.draggable = false;
+    link.setAttribute('aria-describedby', 'shortcutSortDescription');
+    link.title = `${shortcut.name}\n${shortcut.url}`;
     
     const icon = document.createElement('div');
     icon.className = 'shortcut-icon';
@@ -1101,38 +1156,30 @@ function createShortcutElement(shortcut, index) {
     
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'shortcut-delete';
+    deleteBtn.type = 'button';
+    deleteBtn.setAttribute('aria-label', `删除 ${shortcut.name}`);
+    deleteBtn.title = '删除快捷方式';
     deleteBtn.textContent = '×';
     deleteBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        deleteShortcut(index);
+        deleteShortcut(shortcut.id);
     });
     
     const editBtn = document.createElement('button');
     editBtn.className = 'shortcut-edit';
+    editBtn.type = 'button';
+    editBtn.setAttribute('aria-label', `编辑 ${shortcut.name}`);
+    editBtn.title = '编辑快捷方式';
     editBtn.textContent = '✎';
     editBtn.addEventListener('click', function(e) {
         e.stopPropagation();
-        editShortcut(index);
+        editShortcut(shortcut.id);
     });
     
-    div.appendChild(icon);
-    div.appendChild(name);
+    link.append(icon, name);
+    div.appendChild(link);
     div.appendChild(deleteBtn);
     div.appendChild(editBtn);
-    
-    div.addEventListener('dragstart', handleDragStart);
-    div.addEventListener('dragover', handleDragOver);
-    div.addEventListener('drop', handleDrop);
-    div.addEventListener('dragend', handleDragEnd);
-    div.addEventListener('dragenter', handleDragEnter);
-    div.addEventListener('dragleave', handleDragLeave);
-    
-    div.addEventListener('click', function(e) {
-        if (e.target.closest('.shortcut').classList.contains('dragging')) {
-            return;
-        }
-        window.open(shortcut.url, '_blank');
-    });
     
     return div;
 }
@@ -1183,9 +1230,10 @@ function setCachedFavicon(domain, url, ttlMs) {
     writeFaviconCache(cache);
 }
 
-function renderIconImage(iconElement, src, name) {
+function renderIconImage(iconElement, src) {
     const img = document.createElement('img');
-    img.alt = name || 'shortcut icon';
+    img.alt = '';
+    img.draggable = false;
     img.style.width = '32px';
     img.style.height = '32px';
     img.style.objectFit = 'contain';
@@ -1217,7 +1265,7 @@ function buildFallbackIconDataUrl(domain, name) {
 }
 
 function setFallbackIcon(iconElement, domain, name) {
-    renderIconImage(iconElement, buildFallbackIconDataUrl(domain, name), name);
+    renderIconImage(iconElement, buildFallbackIconDataUrl(domain, name));
 }
 
 function buildFaviconSources(domain) {
@@ -1279,7 +1327,7 @@ async function loadFavicon(iconElement, domain, name) {
     const cached = getCachedFavicon(domain);
     if (cached.hit) {
         if (cached.url) {
-            renderIconImage(iconElement, cached.url, name);
+            renderIconImage(iconElement, cached.url);
         }
         return;
     }
@@ -1288,7 +1336,7 @@ async function loadFavicon(iconElement, domain, name) {
     for (const src of sources) {
         try {
             const loadedSrc = await testFaviconSource(src);
-            renderIconImage(iconElement, loadedSrc, name);
+            renderIconImage(iconElement, loadedSrc);
             setCachedFavicon(domain, loadedSrc, FAVICON_CACHE_SUCCESS_TTL);
             return;
         } catch (error) {
@@ -1306,7 +1354,7 @@ function addShortcut() {
     if (name && url) {
         const formattedUrl = url.startsWith('http') ? url : 'https://' + url;
 
-        const shortcutsList = JSON.parse(localStorage.getItem('shortcuts')) || [];
+        const shortcutsList = getSavedShortcuts();
 
         // URL重复检测
         const duplicate = findDuplicateByUrl(shortcutsList, formattedUrl);
@@ -1317,7 +1365,7 @@ function addShortcut() {
 
         shortcutsList.push({ name, url: formattedUrl });
 
-        saveAndRenderShortcuts(shortcutsList);
+        if (!saveAndRenderShortcuts(shortcutsList)) return;
 
         addShortcutModal.classList.remove('active');
         shortcutForm.reset();
@@ -1325,12 +1373,11 @@ function addShortcut() {
 }
 
 // 编辑快捷方式
-function editShortcut(index) {
-    const shortcutsList = JSON.parse(localStorage.getItem('shortcuts')) || [];
-    const shortcut = shortcutsList[index];
+function editShortcut(id) {
+    const shortcut = getSavedShortcuts().find(item => item.id === id);
     
     if (shortcut) {
-        editingIndex = index;
+        editingShortcutId = id;
         
         modalTitle.textContent = '编辑快捷方式';
         submitBtn.textContent = '保存修改';
@@ -1350,20 +1397,25 @@ function saveEditedShortcut() {
     if (name && url) {
         const formattedUrl = url.startsWith('http') ? url : 'https://' + url;
 
-        const shortcutsList = JSON.parse(localStorage.getItem('shortcuts')) || [];
+        const shortcutsList = getSavedShortcuts();
 
-        // URL重复检测（排除当前正在编辑的项自身）
-        const duplicate = findDuplicateByUrl(shortcutsList, formattedUrl, editingIndex);
+        // 编辑和搜索状态共享同一个标识，不依赖当前卡片位置。
+        const duplicate = findDuplicateByUrl(shortcutsList, formattedUrl, editingShortcutId);
         if (duplicate) {
             showNotification(`该网址已存在快捷方式「${duplicate.name}」`);
             return;
         }
 
-        shortcutsList[editingIndex] = { name, url: formattedUrl };
+        const index = shortcutsList.findIndex(item => item.id === editingShortcutId);
+        if (index < 0) {
+            showNotification('该快捷方式已被删除，请关闭窗口后重试');
+            return;
+        }
+        shortcutsList[index] = { ...shortcutsList[index], name, url: formattedUrl };
 
-        saveAndRenderShortcuts(shortcutsList);
+        if (!saveAndRenderShortcuts(shortcutsList)) return;
 
-        editingIndex = -1;
+        editingShortcutId = null;
 
         addShortcutModal.classList.remove('active');
         shortcutForm.reset();
@@ -1374,20 +1426,102 @@ function saveEditedShortcut() {
 }
 
 // 删除快捷方式
-function deleteShortcut(index) {
-    const shortcutsList = JSON.parse(localStorage.getItem('shortcuts')) || [];
-    
-    shortcutsList.splice(index, 1);
-    
-    saveAndRenderShortcuts(shortcutsList);
+function deleteShortcut(id) {
+    saveAndRenderShortcuts(getSavedShortcuts().filter(item => item.id !== id));
 }
 
-// 保存快捷方式到localStorage并重新渲染
+function persistShortcuts(items) {
+    try {
+        localStorage.setItem('shortcuts', JSON.stringify(items));
+        return true;
+    } catch {
+        showNotification('暂时无法保存快捷方式，请检查浏览器存储空间后重试');
+        return false;
+    }
+}
+
+// 增删改保留搜索条件；排序单独提交，避免重建卡片或打断落位动画。
 function saveAndRenderShortcuts(shortcutsList) {
-    allShortcuts = shortcutsList;
-    localStorage.setItem('shortcuts', JSON.stringify(shortcutsList));
-    clearShortcutSearch();
-    renderShortcuts(shortcutsList);
+    shortcutSorter?.cancel();
+    const normalized = ensureShortcutIds(shortcutsList);
+    if (!persistShortcuts(normalized)) return false;
+    allShortcuts = normalized;
+    dismissShortcutUndo();
+    renderVisibleShortcuts();
+    return true;
+}
+
+function updateShortcutSortControls() {
+    const searching = Boolean(shortcutSearchInput.value.trim());
+    const enabled = !searching && allShortcuts.length > 1;
+    shortcuts.classList.toggle('is-sort-disabled', !enabled);
+
+    shortcutSortHelpTitle.textContent = searching ? '清除搜索后可排序' : '调整快捷方式';
+    shortcutSortHelpPointer.textContent = searching ? '点击搜索框中的 ×，即可恢复排序。'
+        : !enabled ? '添加更多快捷方式后，即可拖动调整顺序。'
+        : '按住鼠标左键拖动卡片，松手放置；移到区域外松手可取消。';
+    shortcutSortDescription.textContent = shortcutSortHelpPointer.textContent;
+    shortcutSortFeedback.hidden = !shortcutSortState.active;
+    shortcutSortFeedback.textContent = !shortcutSortState.active ? ''
+        : shortcutSortState.inside ? '松手放置' : '松手取消';
+    const showUndo = Boolean(shortcutUndoState) && !shortcutSortState.active;
+    shortcutSortUndo.hidden = !showUndo;
+    clearShortcutSearchBtn.hidden = !searching;
+}
+
+function dismissShortcutUndo() {
+    clearTimeout(shortcutUndoTimer);
+    shortcutUndoTimer = null;
+    shortcutUndoState = null;
+    updateShortcutSortControls();
+}
+
+function scheduleShortcutUndoExpiry() {
+    clearTimeout(shortcutUndoTimer);
+    // 等焦点完成转移后再计时，操作撤销按钮时不让入口突然消失。
+    queueMicrotask(() => {
+        if (!shortcutUndoState || shortcutSortUndo.contains(document.activeElement) || shortcutSortUndo.matches(':hover')) return;
+        shortcutUndoTimer = setTimeout(dismissShortcutUndo, 5000);
+    });
+}
+
+function commitShortcutOrder(ids, previousIds, movedId) {
+    const current = getSavedShortcuts();
+    const ordered = orderShortcuts(current, ids);
+    if (!ordered || current.some((item, index) => item.id !== previousIds[index])) {
+        showNotification('快捷方式已在其他页面更新，请重新排序');
+        queueMicrotask(() => {
+            allShortcuts = getSavedShortcuts();
+            dismissShortcutUndo();
+            renderVisibleShortcuts();
+        });
+        return false;
+    }
+    if (!persistShortcuts(ordered)) return false;
+    allShortcuts = ordered;
+    shortcutUndoState = { previousIds, ids, movedId };
+    scheduleShortcutUndoExpiry();
+    updateShortcutSortControls();
+    return true;
+}
+
+function undoShortcutOrder() {
+    if (!shortcutUndoState) return;
+    const { previousIds, ids, movedId } = shortcutUndoState;
+    const current = getSavedShortcuts();
+    const ordered = orderShortcuts(current, previousIds);
+    if (!ordered || current.some((item, index) => item.id !== ids[index])) {
+        dismissShortcutUndo();
+        showNotification('快捷方式已经更新，无法撤销上一次排序');
+        return;
+    }
+    if (!persistShortcuts(ordered)) return;
+    allShortcuts = ordered;
+    dismissShortcutUndo();
+    renderVisibleShortcuts();
+    const movedItem = Array.from(shortcuts.children).find(item => item.dataset.shortcutId === movedId);
+    movedItem?.querySelector('.shortcut-link').focus({ preventScroll: true });
+    shortcutSortStatus.textContent = '已撤销排序，恢复原顺序。';
 }
 
 // 清除快捷方式搜索状态
@@ -1398,6 +1532,7 @@ function clearShortcutSearch() {
     }
     shortcutSearchInput.value = '';
     shortcutSearchWrapper.classList.remove('active');
+    updateShortcutSortControls();
 }
 
 // 启动快捷方式搜索自动收回计时器
@@ -1406,7 +1541,7 @@ function startShortcutSearchCollapseTimer() {
         clearTimeout(shortcutSearchCollapseTimer);
     }
     shortcutSearchCollapseTimer = setTimeout(() => {
-        if (!shortcutSearchInput.value.trim()) {
+        if (!shortcutSearchInput.value.trim() && !shortcutSortState.active) {
             clearShortcutSearch();
             renderShortcuts(allShortcuts);
         }
@@ -1435,99 +1570,18 @@ function handleShortcutSearchInput() {
         shortcutSearchCollapseTimer = null;
     }
 
-    const term = shortcutSearchInput.value.trim().toLowerCase();
-
-    // 输入为空时显示全部
-    if (!term) {
-        renderShortcuts(allShortcuts);
+    renderVisibleShortcuts();
+    if (!shortcutSearchInput.value.trim()) {
         startShortcutSearchCollapseTimer();
-        return;
     }
+}
 
-    // 模糊匹配：同时比对名称和URL
-    const filtered = allShortcuts.filter((item) => {
+function renderVisibleShortcuts() {
+    const term = shortcutSearchInput.value.trim().toLowerCase();
+    const filtered = allShortcuts.filter(item => {
         return item.name.toLowerCase().includes(term) || item.url.toLowerCase().includes(term);
     });
-
     renderShortcuts(filtered);
-
-    // 无匹配结果时提示
-    if (filtered.length === 0) {
-        showNotification('未找到匹配的快捷方式');
-    }
-}
-
-// 拖拽功能相关变量
-let draggedElement = null;
-let draggedIndex = null;
-let hasDraggedBefore = localStorage.getItem('hasDraggedBefore') === 'true';
-
-// 拖拽开始
-function handleDragStart(e) {
-    if (!hasDraggedBefore) {
-        showNotification('拖拽到其他快捷方式上可以重新排序');
-        localStorage.setItem('hasDraggedBefore', 'true');
-        hasDraggedBefore = true;
-    }
-    
-    draggedElement = this;
-    draggedIndex = parseInt(this.dataset.index);
-    this.classList.add('dragging');
-    
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/html', this.innerHTML);
-}
-
-// 拖拽经过
-function handleDragOver(e) {
-    if (e.preventDefault) {
-        e.preventDefault();
-    }
-    
-    e.dataTransfer.dropEffect = 'move';
-    return false;
-}
-
-// 拖拽进入
-function handleDragEnter(e) {
-    if (this !== draggedElement) {
-        this.classList.add('drag-over');
-    }
-}
-
-// 拖拽离开
-function handleDragLeave(e) {
-    this.classList.remove('drag-over');
-}
-
-// 拖拽放置
-function handleDrop(e) {
-    if (e.stopPropagation) {
-        e.stopPropagation();
-    }
-    
-    if (draggedElement !== this) {
-        const dropIndex = parseInt(this.dataset.index);
-        
-        const shortcutsList = JSON.parse(localStorage.getItem('shortcuts')) || [];
-        
-        const draggedShortcut = shortcutsList[draggedIndex];
-        shortcutsList.splice(draggedIndex, 1);
-        shortcutsList.splice(dropIndex, 0, draggedShortcut);
-        
-        saveAndRenderShortcuts(shortcutsList);
-    }
-    
-    return false;
-}
-
-// 拖拽结束
-function handleDragEnd(e) {
-    const shortcuts = document.querySelectorAll('.shortcut');
-    shortcuts.forEach(shortcut => {
-        shortcut.classList.remove('dragging');
-        shortcut.classList.remove('drag-over');
-    });
 }
 
 // 初始化搜索历史记录

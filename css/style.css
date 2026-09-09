@@ -264,7 +264,7 @@ body {
     opacity: 0;
     visibility: hidden;
     transform: translateY(-10px);
-    transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease;
+    transition: opacity 0.3s ease, transform 0.3s ease;
     pointer-events: none;
 }
 
@@ -550,21 +550,103 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
+    min-height: 30px;
     margin-bottom: 15px;
     position: relative;
-    z-index: 1;
+    z-index: 3;
+}
+
+.shortcut-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
 }
 
 .shortcuts-header h3 {
     color: white;
     font-weight: 500;
     font-size: 18px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.shortcut-sort-feedback {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 11px;
 }
 
 .header-actions {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-shrink: 0;
+}
+
+.shortcut-sort-help-anchor {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.shortcut-sort-help-anchor > button {
+    -webkit-tap-highlight-color: transparent;
+}
+
+.shortcut-sort-help {
+    position: absolute;
+    top: calc(100% + 10px);
+    width: 254px;
+    max-width: calc(100vw - 24px);
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 12px;
+    background: rgba(29, 39, 47, 0.96);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(12px);
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 12px;
+    line-height: 1.8;
+    z-index: 5;
+    animation: shortcut-feedback-enter 0.16s ease-out;
+}
+
+/* 透明连接区域让指针可以从按钮移入说明气泡。 */
+.shortcut-sort-help::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    width: 100%;
+    height: 12px;
+}
+
+.shortcut-sort-help::after {
+    content: '';
+    position: absolute;
+    top: -5px;
+    left: calc(var(--help-pointer-x, 50%) - 4px);
+    width: 8px;
+    height: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.16);
+    border-left: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgb(29, 39, 47);
+    transform: rotate(45deg);
+}
+
+.shortcut-sort-help-title {
+    margin-bottom: 4px;
+    color: white;
+    font-weight: 600;
+}
+
+.shortcut-sort-help-anchor > [aria-expanded='true'] {
+    color: white;
+    background-color: rgba(255, 255, 255, 0.25);
 }
 
 .shortcut-action-btn,
@@ -598,6 +680,7 @@ body {
 
 /* 快捷方式搜索框 - 展开/收起动画 */
 .shortcut-search-wrapper {
+    position: relative;
     width: 0;
     overflow: hidden;
     opacity: 0;
@@ -619,7 +702,7 @@ body {
     backdrop-filter: blur(10px);
     color: white;
     font-size: 13px;
-    padding: 0 10px;
+    padding: 0 30px 0 10px;
     outline: none;
     transition: border-color 0.2s ease, background 0.2s ease;
 }
@@ -633,6 +716,27 @@ body {
     background: rgba(255, 255, 255, 0.18);
 }
 
+.shortcut-search-clear {
+    position: absolute;
+    top: 3px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.shortcut-search-clear:hover,
+.shortcut-search-clear:focus-visible {
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+}
+
 .shortcuts {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
@@ -641,8 +745,9 @@ body {
     min-height: 70px;
     overflow-y: auto;
     align-content: start;
-    padding-top: 8px;
-    padding-right: 6px;
+    padding: 10px 6px;
+    overscroll-behavior: contain;
+    overflow-anchor: none;
     scrollbar-width: none;
     -ms-overflow-style: none;
     position: relative;
@@ -668,27 +773,155 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    text-decoration: none;
     color: white;
-    transition: transform 0.2s ease, opacity 0.2s ease;
-    cursor: grab;
+    min-width: 0;
+    border-radius: 12px;
     position: relative;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
-.shortcut.dragging {
-    opacity: 0.5;
-    cursor: grabbing;
-    transform: rotate(5deg) scale(1.05);
-    z-index: 1000;
+.shortcut-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    padding: 4px 2px;
+    border-radius: 12px;
+    color: inherit;
+    text-decoration: none;
+    cursor: grab;
+    -webkit-touch-callout: none;
 }
 
-.shortcut.drag-over {
-    transform: translateY(-10px) scale(1.02);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+.is-sort-disabled .shortcut-link {
+    cursor: pointer;
 }
 
-.shortcut:hover {
-    transform: translateY(-5px);
+.shortcut-link:focus-visible,
+.shortcut-sort-help-anchor .shortcut-action-btn:focus-visible,
+.shortcut-edit:focus-visible,
+.shortcut-delete:focus-visible,
+.shortcut-sort-action:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.9);
+    outline-offset: 3px;
+}
+
+.shortcuts:not(.is-sorting) .shortcut-link:hover .shortcut-icon {
+    background-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+/* 占位卡片保留真实尺寸和焦点，落点变化时只移动这一份节点。 */
+.shortcut-sort-source > * {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.shortcut-sort-source::after {
+    content: '放在这里';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed rgba(255, 255, 255, 0.65);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 12px;
+    pointer-events: none;
+}
+
+.is-sorting .shortcut-link:focus-visible {
+    outline: none;
+}
+
+.shortcut-drag-preview {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 1200;
+    pointer-events: none;
+    transform-origin: 0 0;
+    will-change: transform;
+    background: rgba(42, 49, 60, 0.45);
+    outline: 1px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.28);
+    backdrop-filter: blur(12px);
+}
+
+.shortcut-drag-preview.is-outside {
+    opacity: 0.55;
+}
+
+.is-shortcut-dragging,
+.is-shortcut-dragging * {
+    cursor: grabbing !important;
+}
+
+.shortcut-sort-undo {
+    position: fixed;
+    left: 50%;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    padding: 10px 12px 10px 18px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 12px;
+    background: rgba(29, 39, 47, 0.94);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(12px);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 13px;
+    line-height: 20px;
+    z-index: 1300;
+    animation: shortcut-feedback-enter 0.16s ease-out;
+}
+
+.shortcut-sort-action {
+    border: 0;
+    border-radius: 6px;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.12);
+    color: white;
+    font: inherit;
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.shortcut-sort-action:hover {
+    background: rgba(255, 255, 255, 0.23);
+}
+
+.shortcut-sort-help[hidden],
+.shortcut-sort-help [hidden],
+.shortcut-sort-feedback[hidden],
+.shortcut-sort-undo[hidden],
+.shortcut-search-clear[hidden] {
+    display: none;
+}
+
+@keyframes shortcut-feedback-enter {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
 }
 
 .shortcut-icon {
@@ -701,6 +934,7 @@ body {
     justify-content: center;
     margin-bottom: 8px;
     backdrop-filter: blur(5px);
+    transition: background-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .shortcut-name {
@@ -747,8 +981,36 @@ body {
 }
 
 .shortcut:hover .shortcut-delete,
-.shortcut:hover .shortcut-edit {
+.shortcut:hover .shortcut-edit,
+.shortcut:focus-within .shortcut-delete,
+.shortcut:focus-within .shortcut-edit {
     display: flex;
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .shortcut-delete,
+    .shortcut-edit {
+        width: 28px;
+        height: 28px;
+        font-size: 14px;
+    }
+}
+
+.is-sorting .shortcut-delete,
+.is-sorting .shortcut-edit {
+    display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .shortcut,
+    .shortcut-link,
+    .shortcut-icon,
+    .shortcut-sort-action,
+    .shortcut-sort-help,
+    .shortcut-sort-undo {
+        transition: none;
+        animation: none;
+    }
 }
 
 /* 模态框 - 轻盈设计 */
@@ -800,8 +1062,7 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.55);
 }
 
-.modal-content::before,
-.search-engine-modal .modal-content::before {
+.modal-content::before {
     content: '';
     position: absolute;
     inset: 0;
@@ -972,6 +1233,19 @@ body {
 
 /* 响应式设计 */
 @media (max-width: 600px) {
+    .shortcuts-header:has(.shortcut-search-wrapper.active) .shortcut-heading {
+        display: none;
+    }
+
+    .shortcuts-header:has(.shortcut-search-wrapper.active) .header-actions {
+        width: 100%;
+    }
+
+    .shortcut-search-wrapper.active {
+        flex: 1;
+        min-width: 0;
+    }
+
     .search-container {
         margin-bottom: 28px;
     }
@@ -987,22 +1261,6 @@ body {
         margin-right: 6px;
     }
 
-    .search-engine-btn {
-        min-width: 86px;
-        height: 36px;
-        padding: 0 10px;
-        font-size: 12px;
-    }
-
-    .search-engine-btn span {
-        margin-left: 16px;
-        margin-right: 2px;
-        max-width: 56px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    
     .search-input {
         font-size: 15px;
         padding-left: 12px;
@@ -1075,17 +1333,6 @@ body {
         display: none;
     }
 
-    .search-engine-btn {
-        min-width: 72px;
-        padding: 0 8px;
-        gap: 4px;
-    }
-
-    .search-engine-btn span {
-        margin-left: 14px;
-        max-width: 42px;
-    }
-
     .search-input {
         font-size: 14px;
         padding-left: 10px;
@@ -1131,175 +1378,181 @@ body {
     }
 }
 
-/* 搜索引擎选择按钮 - 重新设计 */
-.search-engine-btn {
+/* 搜索引擎下拉选择 */
+.search-engine-picker {
     position: relative;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05));
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 12px;
-    color: white;
-    padding: 0 14px;
-    height: 40px;
+    flex: 0 0 152px;
+    width: 152px;
+    margin-left: 6px;
+    z-index: 3;
+}
+
+.search-engine-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    font-size: 13px;
-    font-weight: 500;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    min-width: 90px;
-    justify-content: space-between;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-}
-
-.search-engine-btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
+    gap: 8px;
     width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-    transition: left 0.5s;
+    height: 40px;
+    padding: 0 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.12);
+    color: white;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color 0.14s ease, border-color 0.14s ease;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.search-engine-btn:hover::before {
-    left: 100%;
+.search-engine-btn:hover,
+.search-engine-btn[aria-expanded='true'] {
+    background: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.32);
 }
 
-.search-engine-btn:hover {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08));
-    border-color: rgba(255, 255, 255, 0.25);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+.search-engine-picker .engine-icon,
+.search-engine-picker .engine-icon svg {
+    display: block;
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
 }
 
-.search-engine-btn:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+.search-engine-picker .engine-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
 }
 
-.search-engine-btn svg {
+.search-engine-chevron {
+    flex: 0 0 14px;
     width: 14px;
     height: 14px;
-    transition: transform 0.2s ease;
-}
-
-.search-engine-btn:hover svg {
-    transform: translateY(1px);
-}
-
-/* 添加搜索引擎图标 */
-.search-engine-btn::after {
-    content: '';
-    position: absolute;
-    left: 10px;
-    width: 16px;
-    height: 16px;
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
     opacity: 0.8;
+    transition: transform 0.14s ease;
 }
 
-.search-engine-btn span {
-    margin-left: 18px;
-    margin-right: 4px;
+.search-engine-btn[aria-expanded='true'] .search-engine-chevron {
+    transform: rotate(180deg);
 }
 
-/* 不同搜索引擎的图标 */
-.search-engine-btn[data-engine="Google"]::after {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='16' height='16'%3E%3Cpath fill='%234285F4' d='M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z'/%3E%3Cpath fill='%2334A853' d='M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z'/%3E%3Cpath fill='%23FBBC05' d='M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z'/%3E%3Cpath fill='%23EA4335' d='M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z'/%3E%3C/svg%3E");
-}
-
-.search-engine-btn[data-engine="Bing"]::after {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='16' height='16'%3E%3Cpath fill='%2300809D' d='M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z'/%3E%3C/svg%3E");
-}
-
-.search-engine-btn[data-engine="百度"]::after {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='16' height='16'%3E%3Cpath fill='%232932E1' d='M6.5 10.5c-1.38 0-2.5 1.12-2.5 2.5s1.12 2.5 2.5 2.5 2.5-1.12 2.5-2.5-1.12-2.5-2.5-2.5zm11 0c-1.38 0-2.5 1.12-2.5 2.5s1.12 2.5 2.5 2.5 2.5-1.12 2.5-2.5-1.12-2.5-2.5-2.5z'/%3E%3Cpath fill='%232932E1' d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z'/%3E%3C/svg%3E");
-}
-
-.search-engine-btn[data-engine="DuckDuckGo"]::after {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='16' height='16'%3E%3Cpath fill='%23DE5833' d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z'/%3E%3Ccircle cx='12' cy='12' r='5' fill='%23DE5833'/%3E%3C/svg%3E");
-}
-
-/* 搜索引擎选择弹窗 - 轻盈设计 */
-.search-engine-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.25s ease, visibility 0.25s ease;
-}
-
-.search-engine-modal.active {
-    opacity: 1;
-    visibility: visible;
-}
-
-.search-engine-modal .modal-backdrop {
+.search-engine-dropdown {
     position: absolute;
-    top: 0;
+    top: calc(100% + 8px);
     left: 0;
-    width: 100%;
-    height: 100%;
-    background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.16), rgba(0, 0, 0, 0.35));
-    backdrop-filter: blur(14px) saturate(125%);
-    -webkit-backdrop-filter: blur(14px) saturate(125%);
-    transition: backdrop-filter 0.3s ease, background 0.3s ease;
+    display: grid;
+    gap: 2px;
+    width: 196px;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 160px);
+    padding: 6px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 12px;
+    background: rgba(29, 39, 47, 0.96);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+    z-index: 5;
+    animation: search-engine-dropdown-enter 0.14s ease-out;
 }
 
-.search-engine-modal .modal-content {
-    position: relative;
-    background: linear-gradient(155deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 255, 0.78));
-    backdrop-filter: blur(24px) saturate(130%);
-    -webkit-backdrop-filter: blur(24px) saturate(130%);
-    border-radius: 20px;
-    padding: 0;
-    width: 90%;
-    max-width: 420px;
-    max-height: 70vh;
-    overflow: hidden;
-    box-shadow: 0 18px 44px rgba(8, 15, 40, 0.24);
-    transform: scale(0.95) translateY(10px);
-    transition: all 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-    border: 1px solid rgba(255, 255, 255, 0.55);
+.search-engine-dropdown[hidden] {
+    display: none;
 }
 
-.search-engine-modal.active .modal-content {
-    transform: scale(1) translateY(0);
-}
-
-.search-engine-modal .modal-header {
+.search-engine-picker .engine-option {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 20px 24px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.55);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.08));
+    gap: 10px;
+    width: 100%;
+    min-height: 40px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.86);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.search-engine-modal .modal-header h3 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-    color: #2f3448;
-    letter-spacing: 0.2px;
+.search-engine-picker .engine-option:hover {
+    background: rgba(255, 255, 255, 0.16);
+    color: white;
 }
 
-.modal .close-btn,
-.search-engine-modal .close-btn {
+.search-engine-picker .engine-option[aria-selected='true'] {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.engine-check {
+    flex: 0 0 16px;
+    opacity: 0;
+}
+
+.engine-option[aria-selected='true'] .engine-check {
+    opacity: 1;
+}
+
+.search-engine-btn:focus-visible,
+.search-engine-picker .engine-option:focus-visible {
+    outline: 2px solid rgba(255, 255, 255, 0.85);
+    outline-offset: -2px;
+}
+
+@keyframes search-engine-dropdown-enter {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 600px) {
+    .search-engine-picker {
+        flex-basis: 128px;
+        width: 128px;
+    }
+
+    .search-engine-btn {
+        height: 36px;
+        padding: 0 8px;
+        gap: 6px;
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .search-engine-picker {
+        flex-basis: 116px;
+        width: 116px;
+        margin-left: 5px;
+    }
+}
+
+@media (pointer: coarse) {
+    .search-engine-picker .engine-option {
+        min-height: 44px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .search-engine-dropdown,
+    .search-engine-btn,
+    .search-engine-chevron,
+    .search-engine-picker .engine-option {
+        transition: none;
+        animation: none;
+    }
+}
+
+.modal .close-btn {
     position: absolute;
     right: 16px;
     top: 16px;
@@ -1318,156 +1571,19 @@ body {
     -webkit-backdrop-filter: blur(8px);
 }
 
-.modal .close-btn:hover,
-.search-engine-modal .close-btn:hover {
+.modal .close-btn:hover {
     background: rgba(255, 255, 255, 0.8);
     color: #343b59;
 }
 
-.search-engine-modal .search-engines {
-    padding: 14px 16px 16px;
-    max-height: 50vh;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(105, 123, 226, 0.45) rgba(255, 255, 255, 0.18);
-}
-
-.search-engine-modal .search-engines::-webkit-scrollbar {
-    width: 8px;
-}
-
-.search-engine-modal .search-engines::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.18);
-    border-radius: 8px;
-}
-
-.search-engine-modal .search-engines::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, rgba(108, 129, 238, 0.75), rgba(129, 86, 191, 0.75));
-    border-radius: 8px;
-}
-
-.search-engine-modal .engine-option {
-    display: flex;
-    align-items: center;
-    padding: 14px;
-    border-radius: 14px;
-    cursor: pointer;
-    transition: all 0.2s ease, box-shadow 0.25s ease;
-    margin-bottom: 6px;
-    border: 1px solid rgba(117, 127, 173, 0.18);
-    background: rgba(255, 255, 255, 0.45);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-}
-
-.search-engine-modal .engine-option:hover {
-    background: rgba(255, 255, 255, 0.68);
-    transform: translateY(-1px);
-    border-color: rgba(102, 126, 234, 0.34);
-    box-shadow: 0 8px 16px rgba(90, 108, 207, 0.12);
-}
-
-.search-engine-modal .engine-option.selected {
-    border-color: rgba(103, 123, 231, 0.52);
-    background: linear-gradient(135deg, rgba(103, 123, 231, 0.12), rgba(127, 84, 183, 0.12));
-    box-shadow: 0 10px 20px rgba(84, 105, 216, 0.18);
-}
-
-.search-engine-modal .engine-option:last-child {
-    margin-bottom: 0;
-}
-
-.search-engine-modal .engine-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-right: 14px;
-}
-
-.search-engine-modal .engine-icon svg {
-    width: 28px;
-    height: 28px;
-}
-
-.search-engine-modal .google-icon {
-    background: rgba(66, 133, 244, 0.08);
-}
-
-.search-engine-modal .baidu-icon {
-    background: rgba(41, 50, 225, 0.08);
-}
-
-.search-engine-modal .bing-icon {
-    background: rgba(0, 128, 157, 0.08);
-}
-
-.search-engine-modal .duckduckgo-icon {
-    background: rgba(222, 88, 51, 0.08);
-}
-
-.search-engine-modal .engine-info h4 {
-    margin: 0 0 3px 0;
-    font-size: 15px;
-    font-weight: 600;
-    color: #2f3448;
-}
-
-.search-engine-modal .engine-info p {
-    margin: 0;
-    font-size: 13px;
-    color: #59607b;
-}
-
-/* 搜索引擎选择器样式 - 已替换为按钮 */
-.search-engine-selector {
-    display: none; /* 隐藏原始选择器 */
-}
-
-/* 响应式设计 */
 @media (max-width: 768px) {
-    .search-engine-btn {
-        min-width: 100px;
-        padding: 0 12px;
-        font-size: 13px;
-    }
-    
     .modal-content {
         width: 95%;
         border-radius: 16px;
     }
-    
+
     .modal-header {
         padding: 16px 20px;
-    }
-    
-    .modal-header h3 {
-        font-size: 16px;
-    }
-    
-    .engine-option {
-        padding: 12px;
-    }
-    
-    .engine-icon {
-        width: 40px;
-        height: 40px;
-        margin-right: 12px;
-    }
-    
-    .engine-icon svg {
-        width: 24px;
-        height: 24px;
-    }
-    
-    .engine-info h4 {
-        font-size: 15px;
-    }
-    
-    .engine-info p {
-        font-size: 13px;
     }
 }
 

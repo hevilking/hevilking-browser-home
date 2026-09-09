@@ -37,13 +37,71 @@
         <!-- 搜索区域 -->
         <div class="search-container">
             <div class="search-box">
-                <!-- 搜索引擎选择按钮 -->
-                <button class="search-engine-btn" id="searchEngineBtn" data-engine="Bing">
-                    <span id="currentEngine">Bing</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="6 9 12 15 18 9"></polyline>
-                    </svg>
-                </button>
+                <!-- 搜索引擎下拉选择 -->
+                <div class="search-engine-picker" id="searchEnginePicker">
+                    <button class="search-engine-btn" id="searchEngineBtn" type="button" data-engine="Bing" aria-label="搜索引擎：Bing" aria-haspopup="listbox" aria-controls="searchEngineDropdown" aria-expanded="false">
+                        <span class="engine-icon" id="currentEngineIcon" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+                            <path fill="#00809D" d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
+                            </svg>
+                        </span>
+                        <span class="engine-name" id="currentEngine">Bing</span>
+                        <svg class="search-engine-chevron" aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                    <div class="search-engine-dropdown" id="searchEngineDropdown" role="listbox" aria-label="搜索引擎" hidden>
+                        <button class="engine-option" type="button" role="option" aria-selected="false" tabindex="-1" data-engine="Google" data-url="https://www.google.com/search?q=">
+                            <span class="engine-icon" aria-hidden="true">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+                                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                                </svg>
+                            </span>
+                            <span class="engine-name">Google</span>
+                            <svg class="engine-check" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="5 12 9 16 19 6"></polyline>
+                            </svg>
+                        </button>
+                        <button class="engine-option" type="button" role="option" aria-selected="true" tabindex="-1" data-engine="Bing" data-url="https://cn.bing.com/search?q=">
+                            <span class="engine-icon" aria-hidden="true">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+                                <path fill="#00809D" d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
+                                </svg>
+                            </span>
+                            <span class="engine-name">Bing</span>
+                            <svg class="engine-check" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="5 12 9 16 19 6"></polyline>
+                            </svg>
+                        </button>
+                        <button class="engine-option" type="button" role="option" aria-selected="false" tabindex="-1" data-engine="百度" data-url="https://www.baidu.com/s?wd=">
+                            <span class="engine-icon" aria-hidden="true">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+                                <path fill="#2932E1" d="M6.5 10.5c-1.38 0-2.5 1.12-2.5 2.5s1.12 2.5 2.5 2.5 2.5-1.12 2.5-2.5-1.12-2.5-2.5-2.5zm11 0c-1.38 0-2.5 1.12-2.5 2.5s1.12 2.5 2.5 2.5 2.5-1.12 2.5-2.5-1.12-2.5-2.5-2.5z"/>
+                                <path fill="#2932E1" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                                </svg>
+                            </span>
+                            <span class="engine-name">百度</span>
+                            <svg class="engine-check" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="5 12 9 16 19 6"></polyline>
+                            </svg>
+                        </button>
+                        <button class="engine-option" type="button" role="option" aria-selected="false" tabindex="-1" data-engine="DuckDuckGo" data-url="https://duckduckgo.com/?q=">
+                            <span class="engine-icon" aria-hidden="true">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+                                <path fill="#DE5833" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                                <circle cx="12" cy="12" r="5" fill="#DE5833"/>
+                                </svg>
+                            </span>
+                            <span class="engine-name">DuckDuckGo</span>
+                            <svg class="engine-check" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="5 12 9 16 19 6"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
                 
                 <!-- 搜索图标 -->
                 <div class="search-icon">
@@ -96,14 +154,23 @@
         <!-- 网站快捷方式 -->
         <div class="shortcuts-container">
             <div class="shortcuts-header">
-                <h3>快捷方式</h3>
+                <div class="shortcut-heading">
+                    <h3>快捷方式</h3>
+                    <span class="shortcut-sort-feedback" id="shortcutSortFeedback" aria-hidden="true" hidden></span>
+                </div>
                 <div class="header-actions">
-                    <button class="shortcut-action-btn drag-hint" id="dragHintBtn" type="button" aria-label="拖拽提示">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="8 6 2 12 8 18"></polyline>
-                            <polyline points="16 6 22 12 16 18"></polyline>
-                        </svg>
-                    </button>
+                    <div class="shortcut-sort-help-anchor">
+                        <button class="shortcut-action-btn" id="dragHintBtn" type="button" aria-label="排序操作说明" aria-describedby="shortcutSortHelp" aria-controls="shortcutSortHelp" aria-expanded="false">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="8 6 2 12 8 18"></polyline>
+                                <polyline points="16 6 22 12 16 18"></polyline>
+                            </svg>
+                        </button>
+                        <div class="shortcut-sort-help" id="shortcutSortHelp" role="tooltip" hidden>
+                            <p class="shortcut-sort-help-title" id="shortcutSortHelpTitle">调整快捷方式</p>
+                            <p id="shortcutSortHelpPointer">按住鼠标左键拖动卡片，松手放置；移到区域外松手可取消。</p>
+                        </div>
+                    </div>
                     <button class="shortcut-action-btn" id="copyShortcutMetaBtn" type="button" aria-label="复制快捷方式元数据" title="复制快捷方式元数据">
                         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -125,13 +192,16 @@
                     </button>
                     <div class="shortcut-search-wrapper" id="shortcutSearchWrapper">
                         <input type="text" class="shortcut-search-input" id="shortcutSearchInput" placeholder="搜索快捷方式...">
+                        <button class="shortcut-search-clear" id="clearShortcutSearchBtn" type="button" aria-label="清除搜索" title="清除搜索" hidden>×</button>
                     </div>
                     <button class="add-shortcut-btn" id="addShortcutBtn">+</button>
                 </div>
             </div>
-            <div class="shortcuts" id="shortcuts">
+            <div class="shortcuts" id="shortcuts" role="list" aria-label="网站快捷方式">
                 <!-- 快捷方式将通过JavaScript动态添加 -->
             </div>
+            <p class="visually-hidden" id="shortcutSortDescription">按住鼠标左键拖动卡片，松手放置；移到区域外松手可取消。</p>
+            <div class="visually-hidden" id="shortcutSortStatus" role="status" aria-live="polite" aria-atomic="true"></div>
         </div>
         
         <!-- 添加快捷方式模态框 -->
@@ -162,6 +232,12 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- 撤销浮层独立于玻璃容器，不占用网格布局空间。 -->
+    <div class="shortcut-sort-undo" id="shortcutSortUndo" hidden>
+        <span>顺序已调整</span>
+        <button class="shortcut-sort-action" id="undoShortcutSortBtn" type="button">撤销</button>
     </div>
 
     <!-- 背景设置面板 -->
@@ -243,75 +319,6 @@
         </div>
     </aside>
 
-    <!-- 搜索引擎选择弹窗 -->
-    <div class="search-engine-modal" id="searchEngineModal">
-        <div class="modal-backdrop" id="modalBackdrop"></div>
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>选择搜索引擎</h3>
-                <button class="close-btn" id="closeSearchModal">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </button>
-            </div>
-            <div class="search-engines">
-                <div class="engine-option" data-engine="Google" data-url="https://www.google.com/search?q=">
-                    <div class="engine-icon google-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                        </svg>
-                    </div>
-                    <div class="engine-info">
-                        <h4>Google</h4>
-                        <p>全球最大的搜索引擎</p>
-                    </div>
-                </div>
-
-                <div class="engine-option" data-engine="Bing" data-url="https://cn.bing.com/search?q=">
-                    <div class="engine-icon bing-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-                            <path fill="#00809D" d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
-                        </svg>
-                    </div>
-                    <div class="engine-info">
-                        <h4>Bing</h4>
-                        <p>微软出品搜索引擎</p>
-                    </div>
-                </div>
-                
-                <div class="engine-option" data-engine="百度" data-url="https://www.baidu.com/s?wd=">
-                    <div class="engine-icon baidu-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-                            <path fill="#2932E1" d="M6.5 10.5c-1.38 0-2.5 1.12-2.5 2.5s1.12 2.5 2.5 2.5 2.5-1.12 2.5-2.5-1.12-2.5-2.5-2.5zm11 0c-1.38 0-2.5 1.12-2.5 2.5s1.12 2.5 2.5 2.5 2.5-1.12 2.5-2.5-1.12-2.5-2.5-2.5z"/>
-                            <path fill="#2932E1" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
-                        </svg>
-                    </div>
-                    <div class="engine-info">
-                        <h4>百度</h4>
-                        <p>中文搜索引擎首选</p>
-                    </div>
-                </div>
-                
-                <div class="engine-option" data-engine="DuckDuckGo" data-url="https://duckduckgo.com/?q=">
-                    <div class="engine-icon duckduckgo-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-                            <path fill="#DE5833" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
-                            <circle cx="12" cy="12" r="5" fill="#DE5833"/>
-                        </svg>
-                    </div>
-                    <div class="engine-info">
-                        <h4>DuckDuckGo</h4>
-                        <p>注重隐私的搜索引擎</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
     
     <script type="module" src="js/main.js?v=2.0"></script>
 </body>
