@@ -63,6 +63,7 @@ async function openPage(t, items = fixture(), options = {}) {
         window.shortcutTestWrites = 0;
         window.backgroundTestWrites = 0;
         window.backgroundRuntimeWrites = 0;
+        window.languageTestWrites = 0;
         document.addEventListener('pointerdown', event => { window.shortcutTestPointer = event.pointerId; }, true);
         const setItem = Storage.prototype.setItem;
         Storage.prototype.setItem = function(key, value) {
@@ -72,6 +73,10 @@ async function openPage(t, items = fixture(), options = {}) {
                 if (window.backgroundTestFailSave) throw new DOMException('模拟配置存储已满', 'QuotaExceededError');
             }
             if (this === localStorage && key === 'backgroundRuntimeCache') window.backgroundRuntimeWrites++;
+            if (this === localStorage && key === 'interfaceLanguage') {
+                window.languageTestWrites++;
+                if (window.languageTestFailSave) throw new DOMException('模拟语言设置保存失败', 'QuotaExceededError');
+            }
             if (this === localStorage && key === 'shortcuts' && window.shortcutTestFailSave) {
                 throw new DOMException('模拟存储已满', 'QuotaExceededError');
             }
@@ -576,15 +581,11 @@ test('切换各引擎保留输入和光标，搜索地址正确且刷新后记�
         window.engineTestSearches = [];
         window.open = url => { window.engineTestSearches.push(url); return null; };
     });
-    let initialInputX;
-    let initialButtonWidth;
+    const originalInput = await input.boundingBox();
+    const engineWidths = new Map();
     for (const [index, [engine, prefix]] of engines.entries()) {
         await input.fill(draft);
         await input.evaluate(element => element.setSelectionRange(2, 6, 'backward'));
-        const inputRect = await input.boundingBox();
-        const buttonRect = await page.locator('#searchEngineBtn').boundingBox();
-        initialInputX ??= inputRect.x;
-        initialButtonWidth ??= buttonRect.width;
         await chooseEngine(page, engine);
         assert.equal(await input.inputValue(), draft);
         assert.deepEqual(await input.evaluate(element => [element.selectionStart, element.selectionEnd, element.selectionDirection]), [2, 6, 'backward']);
@@ -592,14 +593,19 @@ test('切换各引擎保留输入和光标，搜索地址正确且刷新后记�
         assert.equal(await page.locator('#currentEngine').textContent(), engine);
         assert.equal(await page.evaluate(() => localStorage.getItem('defaultSearchEngine')), engine);
         assert.equal(await page.locator('#searchEngineDropdown').isVisible(), false);
-        assert.equal((await input.boundingBox()).x, initialInputX);
-        assert.equal((await page.locator('#searchEngineBtn').boundingBox()).width, initialButtonWidth);
+        const inputRect = await input.boundingBox();
+        engineWidths.set(engine, (await page.locator('#searchEngineBtn').boundingBox()).width);
+        assert.equal(inputRect.x + inputRect.width, originalInput.x + originalInput.width);
+        assert.equal(await page.locator('#currentEngine').evaluate(element => element.scrollWidth <= element.clientWidth), true);
         assert.equal(await page.evaluate(() => window.engineTestSearches.length), index);
         assert.equal(await page.locator('.notification').filter({ hasText: '已切换到' }).count(), 0);
         if (index === 0) await input.press('Enter');
         else await page.locator('#searchButton').click();
         assert.equal(await page.evaluate(() => window.engineTestSearches.at(-1)), prefix + encodeURIComponent(draft.trim()));
     }
+    assert.ok(engineWidths.get('DuckDuckGo') > engineWidths.get('Google'));
+    assert.ok(engineWidths.get('Google') > engineWidths.get('Bing'));
+    assert.ok(engineWidths.get('Google') > engineWidths.get('百度'));
     await page.reload();
     assert.equal(await page.locator('#currentEngine').textContent(), 'DuckDuckGo');
     await page.locator('#searchEngineBtn').click();
@@ -697,7 +703,7 @@ test('无效的旧引擎设置回退到 Bing，重新选择可正常保存', asy
     assert.equal(await page.evaluate(() => localStorage.getItem('defaultSearchEngine')), 'Google');
 });
 
-test('窄屏触屏菜单完整可点，切换长名称不会挤动搜索框', async t => {
+test('窄屏触屏菜单完整可点，切换长名称时自适应宽度且保持搜索区域右侧位置', async t => {
     const { page } = await openPage(t, fixture(4), {
         viewport: { width: 360, height: 780 }, isMobile: true, hasTouch: true
     });
@@ -714,8 +720,11 @@ test('窄屏触屏菜单完整可点，切换长名称不会挤动搜索框', as
     await page.getByRole('option', { name: 'DuckDuckGo', exact: true }).tap();
     assert.equal(await page.locator('#searchInput').inputValue(), '继续搜索');
     assert.equal(await menu.isVisible(), false);
-    assert.equal((await trigger.boundingBox()).width, original.width);
-    assert.equal((await page.locator('#searchInput').boundingBox()).x, originalInput.x);
+    const currentInput = await page.locator('#searchInput').boundingBox();
+    assert.ok((await trigger.boundingBox()).width > original.width);
+    assert.ok(currentInput.x > originalInput.x);
+    assert.equal(currentInput.x + currentInput.width, originalInput.x + originalInput.width);
+    assert.equal(await page.locator('#currentEngine').evaluate(element => element.scrollWidth <= element.clientWidth), true);
     await trigger.tap();
     await captureScreenshot(page, 'search-engine-mobile.png');
     await page.touchscreen.tap(345, 500);
@@ -1132,4 +1141,347 @@ test('预览暂停自动轮播，取消后恢复，纯色模式不会开启图�
     const savedWrites = await page.evaluate(() => window.backgroundRuntimeWrites);
     await page.clock.fastForward(30000);
     assert.equal(await page.evaluate(() => window.backgroundRuntimeWrites), savedWrites);
+});
+
+
+// 双语回归沿用同一套真实交互及存储夹具。
+const englishFixture = (count = 4) => fixture(count).map((item, index) => ({ ...item, name: `Website ${index + 1}` }));
+const pageLanguage = page => page.locator('html').getAttribute('lang');
+const storedLanguage = page => page.evaluate(() => localStorage.getItem('interfaceLanguage'));
+
+async function saveEnglish(page) {
+    await openSettings(page);
+    await page.locator('#interfaceLanguage').selectOption('en');
+    await waitForSettingsSave(page);
+    await page.locator('#bgApplyBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+}
+
+test('英文浏览器首次仍用中文，语言预览保留输入及背景草稿，取消和关闭均回滚', async t => {
+    const { page } = await openPage(t, fixture(4), { locale: 'en-US' });
+    assert.equal(await pageLanguage(page), 'zh-CN');
+    assert.equal(await page.title(), '让我们开始吧');
+    await page.locator('#searchInput').fill('保留我的 search draft');
+    await page.locator('#searchInput').evaluate(input => input.setSelectionRange(2, 6, 'backward'));
+    const originalFrame = await backgroundFrame(page);
+    const originalSettings = await storedBackground(page);
+    const initialShortcuts = await saved(page);
+    for (const close of ['#bgCancelBtn', '#bgSettingsClose']) {
+        await openSettings(page);
+        await page.locator('#bgOverlayOpacityValue').fill('0');
+        await waitForSettingsSave(page);
+        const preview = await backgroundFrame(page);
+        await page.locator('#interfaceLanguage').selectOption('en');
+        assert.equal(await pageLanguage(page), 'en');
+        assert.equal(await page.title(), "Let's get started");
+        assert.equal(await page.locator('#bgSettingsTitle').textContent(), 'Settings');
+        assert.deepEqual(await page.locator('#interfaceLanguage option').allTextContents(), ['简体中文', 'English']);
+        assert.equal(await page.locator('#searchInput').inputValue(), '保留我的 search draft');
+        assert.deepEqual(await page.locator('#searchInput').evaluate(input => [input.selectionStart, input.selectionEnd]), [2, 6]);
+        assert.deepEqual(await backgroundFrame(page), preview);
+        assert.equal(await page.locator('#bgOverlayOpacityValue').inputValue(), '0');
+        assert.equal(await storedLanguage(page), null);
+        assert.equal(await page.evaluate(() => window.languageTestWrites), 0);
+        assert.equal(await storedBackground(page), originalSettings);
+        assert.equal(await page.evaluate(() => [...document.querySelectorAll('#shortcuts > .shortcut')]
+            .every(node => window.shortcutTestNodes.includes(node))), true);
+        await page.locator(close).click();
+        await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+        assert.equal(await pageLanguage(page), 'zh-CN');
+        assert.deepEqual(await backgroundFrame(page), originalFrame);
+        assert.deepEqual(await saved(page), initialShortcuts);
+    }
+    await openSettings(page);
+    await page.locator('#interfaceLanguage').selectOption('en');
+    assert.equal(await page.locator('#bgApplyBtn').isEnabled(), true);
+    await page.locator('#interfaceLanguage').selectOption('zh-CN');
+    assert.equal(await page.locator('#bgApplyBtn').isDisabled(), true);
+});
+
+test('英文保存后首屏和刷新保持一致，已有百度选择兼容，恢复默认先预览中文', async t => {
+    const { page } = await openPage(t, englishFixture());
+    await chooseEngine(page, '百度');
+    await saveEnglish(page);
+    assert.equal(await storedLanguage(page), 'en');
+    assert.equal(await page.locator('#currentEngine').textContent(), 'Baidu');
+    assert.equal(await page.locator('#searchEngineBtn').getAttribute('data-engine'), '百度');
+    assert.equal(await page.evaluate(() => localStorage.getItem('defaultSearchEngine')), '百度');
+    await page.addInitScript(() => {
+        new PerformanceObserver(list => {
+            if (list.getEntries().some(entry => entry.name === 'first-contentful-paint')) {
+                window.languageAtFirstPaint = document.documentElement.lang;
+            }
+        }).observe({ type: 'paint', buffered: true });
+    });
+    await page.route('**/js/i18n/en.js', async route => {
+        await new Promise(resolve => setTimeout(resolve, 180));
+        await route.continue();
+    });
+    await page.reload();
+    await page.waitForFunction(() => window.languageAtFirstPaint);
+    assert.equal(await page.evaluate(() => window.languageAtFirstPaint), 'en');
+    assert.equal(await page.title(), "Let's get started");
+    assert.equal(await page.locator('#currentEngine').textContent(), 'Baidu');
+    const original = await storedBackground(page);
+    await openSettings(page);
+    assert.equal(await page.locator('#interfaceLanguage').inputValue(), 'en');
+    await page.locator('#bgResetBtn').click();
+    await waitForSettingsSave(page);
+    assert.equal(await pageLanguage(page), 'zh-CN');
+    assert.equal(await storedLanguage(page), 'en');
+    assert.equal(await storedBackground(page), original);
+    await page.locator('#bgCancelBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    assert.equal(await pageLanguage(page), 'en');
+    await openSettings(page);
+    await page.locator('#bgResetBtn').click();
+    await waitForSettingsSave(page);
+    await page.locator('#bgApplyBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    assert.equal(await storedLanguage(page), 'zh-CN');
+    assert.equal(await pageLanguage(page), 'zh-CN');
+    assert.equal(await page.locator('#currentEngine').textContent(), '百度');
+});
+
+test('语言与背景保存失败不留下部分配置，保留预览以供重试或取消', async t => {
+    const { page } = await openPage(t, englishFixture());
+    const original = await storedBackground(page);
+    await openSettings(page);
+    await page.locator('#interfaceLanguage').selectOption('en');
+    await page.locator('#bgSolidColorHex').fill('#123456');
+    await waitForSettingsSave(page);
+    await page.evaluate(() => { window.backgroundTestFailSave = true; });
+    await page.locator('#bgApplyBtn').click();
+    await page.locator('#bgSettingsMessage').waitFor({ state: 'visible' });
+    assert.match(await page.locator('#bgSettingsMessage').textContent(), /Could not save/);
+    assert.equal(await storedLanguage(page), null);
+    assert.equal(await storedBackground(page), original);
+    assert.equal(await pageLanguage(page), 'en');
+    assert.equal(await page.locator('#bgSolidColorHex').inputValue(), '#123456');
+    await page.evaluate(() => { window.backgroundTestFailSave = false; });
+    await page.locator('#bgApplyBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    assert.equal(await storedLanguage(page), 'en');
+    const committed = await storedBackground(page);
+    assert.equal(JSON.parse(committed).solidColor, '#123456');
+
+    await openSettings(page);
+    await page.locator('#interfaceLanguage').selectOption('zh-CN');
+    await page.locator('#bgOverlayOpacityValue').fill('12');
+    await waitForSettingsSave(page);
+    await page.evaluate(() => { window.languageTestFailSave = true; });
+    await page.locator('#bgApplyBtn').click();
+    await page.locator('#bgSettingsMessage').waitFor({ state: 'visible' });
+    assert.match(await page.locator('#bgSettingsMessage').textContent(), /保存失败/);
+    assert.equal(await storedLanguage(page), 'en');
+    assert.equal(await storedBackground(page), committed);
+    await page.locator('#bgCancelBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    assert.equal(await pageLanguage(page), 'en');
+    assert.equal((await backgroundFrame(page)).color, 'rgb(18, 52, 86)');
+});
+
+test('英文弹窗校验、编辑和拖动撤销正常，语言切换不重置正在编辑的内容', async t => {
+    const { page } = await openPage(t, englishFixture());
+    await saveEnglish(page);
+    await page.locator('#addShortcutBtn').click();
+    assert.equal(await page.locator('#modalTitle').textContent(), 'Add shortcut');
+    await page.locator('#submitBtn').click();
+    assert.equal(await page.locator('#shortcutName').evaluate(input => input.validationMessage), 'Enter a website name.');
+    await page.locator('#shortcutName').fill('New website');
+    await page.locator('#shortcutUrl').fill('https://shortcut-1.example/');
+    await page.locator('#submitBtn').click();
+    await page.locator('.notification').filter({ hasText: 'already uses this URL' }).waitFor({ state: 'visible' });
+    await page.locator('#shortcutUrl').fill('https://new-site.example/');
+    await page.locator('#submitBtn').click();
+    await page.locator('#addShortcutModal').waitFor({ state: 'hidden' });
+    await cards(page).first().hover();
+    await cards(page).first().locator('.shortcut-edit').click();
+    await page.locator('#shortcutName').fill('保留编辑内容');
+    // 已打开的表单也应更新文案，模拟另一处语言入口调用同一语言服务。
+    await page.evaluate(async () => { (await import('/js/i18n/index.js')).setLanguage('zh-CN'); });
+    assert.equal(await page.locator('#modalTitle').textContent(), '编辑快捷方式');
+    assert.equal(await page.locator('#shortcutName').inputValue(), '保留编辑内容');
+    await page.evaluate(async () => { (await import('/js/i18n/index.js')).setLanguage('en'); });
+    assert.equal(await page.locator('#modalTitle').textContent(), 'Edit shortcut');
+    assert.equal(await page.locator('#submitBtn').textContent(), 'Save');
+    await page.waitForFunction(() => !document.querySelector('.notification'));
+    await captureScreenshot(page, 'english-shortcut-dialog.png');
+    await page.locator('#shortcutName').fill('Edited website');
+    await page.locator('#submitBtn').click();
+    await page.locator('#addShortcutModal').waitFor({ state: 'hidden' });
+    const beforeDrag = await saved(page);
+    const target = await pointAt(page, 2, 0.85);
+    await startDrag(page);
+    await page.mouse.move(target.x, target.y, { steps: 12 });
+    await page.waitForFunction(() => document.querySelectorAll('#shortcuts .shortcut-name')[2].textContent === 'Edited website');
+    await page.mouse.up();
+    await idle(page);
+    assert.equal(await page.locator('#shortcutSortUndo span').textContent(), 'Order updated');
+    assert.match(await page.locator('#shortcutSortStatus').textContent(), /Order saved/);
+    await page.locator('#undoShortcutSortBtn').click();
+    assert.deepEqual(await saved(page), beforeDrag);
+    assert.equal(await page.locator('#shortcutSortStatus').textContent(), 'Reordering undone. Original order restored.');
+});
+
+test('英文百度使用原搜索与联想接口，历史、空状态和静态属性完整翻译', async t => {
+    const { page } = await openPage(t, englishFixture());
+    await saveEnglish(page);
+    await page.route('https://www.baidu.com/sugrec?*', route => route.fulfill({
+        contentType: 'application/json', body: JSON.stringify({ s: ['Baidu suggestion'], g: [{ q: 'Baidu suggestion' }] })
+    }));
+    await page.locator('#searchEngineBtn').click();
+    await page.getByRole('option', { name: 'Baidu', exact: true }).click();
+    await page.locator('#searchInput').fill('English query');
+    await page.locator('.search-suggestion-item-text').filter({ hasText: 'Baidu suggestion' }).waitFor({ state: 'visible' });
+    await page.evaluate(() => { window.open = url => { window.languageSearchUrl = url; return null; }; });
+    await page.locator('#searchButton').click();
+    assert.equal(await page.evaluate(() => window.languageSearchUrl), 'https://www.baidu.com/s?wd=English%20query');
+    await page.locator('#searchInput').fill('');
+    await page.locator('#searchInput').focus();
+    assert.equal(await page.locator('.search-history-item-text').textContent(), 'English query');
+    assert.equal(await page.locator('.search-history-item-delete').getAttribute('aria-label'), 'Remove search: English query');
+    await page.locator('#clearHistoryBtn').click();
+    assert.equal(await page.locator('.search-history-empty').textContent(), 'No search history');
+    await page.locator('#shortcutSearchBtn').click();
+    await page.locator('#shortcutSearchInput').fill('nothing matches');
+    assert.equal(await page.locator('.shortcuts-empty').textContent(), 'No matching shortcuts');
+    assert.equal(await page.locator('#shortcutSortHelpTitle').textContent(), 'Clear search to reorder');
+    const untranslated = await page.evaluate(() => {
+        const issues = [];
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) {
+            const parent = walker.currentNode.parentElement;
+            if (parent.closest('script, style, option[lang="zh-CN"]')) continue;
+            if (/\p{Script=Han}/u.test(walker.currentNode.textContent)) issues.push(walker.currentNode.textContent.trim());
+        }
+        document.querySelectorAll('[title], [placeholder], [aria-label]').forEach(element => {
+            for (const attribute of ['title', 'placeholder', 'aria-label']) {
+                const value = element.getAttribute(attribute) || '';
+                if (/\p{Script=Han}/u.test(value)) issues.push(attribute + ': ' + value);
+            }
+        });
+        return issues;
+    });
+    assert.deepEqual(untranslated, []);
+});
+
+test('英文导入导出提示支持数量变化，用户提供的名称和元数据原样保留', async t => {
+    const { page } = await openPage(t, englishFixture(1));
+    await saveEnglish(page);
+    await page.evaluate(() => {
+        Object.defineProperty(navigator, 'clipboard', {
+            configurable: true,
+            value: { writeText: async text => { window.languageExport = JSON.parse(text); } }
+        });
+        window.prompt = message => {
+            window.languagePrompt = message;
+            return window.languageImport;
+        };
+        window.languageImport = JSON.stringify([{ name: '用户输入的名称', url: 'https://new.example/' }]);
+    });
+    await page.locator('#copyShortcutMetaBtn').click();
+    await page.locator('.notification').filter({ hasText: 'Copied data for 1 shortcut.' }).waitFor({ state: 'visible' });
+    await page.locator('#importShortcutMetaBtn').click();
+    assert.equal(await page.evaluate(() => window.languagePrompt), 'Paste shortcut data (JSON):');
+    await page.locator('.notification').filter({ hasText: 'Imported 1 new shortcut.' }).waitFor({ state: 'visible' });
+    assert.equal((await saved(page)).at(-1).name, '用户输入的名称');
+    await page.locator('#copyShortcutMetaBtn').click();
+    await page.locator('.notification').filter({ hasText: 'Copied data for 2 shortcuts.' }).waitFor({ state: 'visible' });
+    assert.equal(await page.evaluate(() => window.languageExport.shortcuts.at(-1).name), '用户输入的名称');
+    await page.evaluate(() => { window.languageImport = '{invalid'; });
+    await page.locator('#importShortcutMetaBtn').click();
+    await page.locator('.notification').filter({ hasText: 'not valid JSON' }).waitFor({ state: 'visible' });
+});
+
+test('图库、校验及已出现的提示随语言更新，缩略图和文件名保持原样', async t => {
+    const { page } = await openPage(t, englishFixture());
+    await openSettings(page);
+    await page.locator('#interfaceLanguage').selectOption('en');
+    await page.locator('.bg-upload-empty').waitFor({ state: 'attached' });
+    assert.equal(await page.locator('.bg-upload-empty').textContent(), 'No local images yet. Add a wallpaper you like.');
+    await page.locator('#bgUploadInput').setInputFiles({ name: 'bad.txt', mimeType: 'text/plain', buffer: Buffer.from('bad') });
+    const notification = page.locator('.notification').filter({ hasText: 'Only image files are supported.' });
+    await notification.waitFor({ state: 'visible' });
+    await page.locator('#interfaceLanguage').selectOption('zh-CN');
+    await page.locator('.notification').filter({ hasText: '仅支持图片文件' }).waitFor({ state: 'visible' });
+    const file = await wallpaperFixture(page);
+    await page.locator('#bgUploadInput').setInputFiles(file);
+    await page.waitForFunction(() => document.querySelector('#bgUploadedList img')?.naturalWidth > 0);
+    const image = page.locator('#bgUploadedList img');
+    const originalUrl = await image.getAttribute('src');
+    await image.evaluate(element => { window.languageThumbnail = element; });
+    await page.locator('#interfaceLanguage').selectOption('en');
+    assert.equal(await image.getAttribute('src'), originalUrl);
+    assert.equal(await image.evaluate(element => element === window.languageThumbnail), true);
+    assert.equal(await page.locator('.bg-image-name').textContent(), '示例壁纸.webp');
+    assert.equal(await page.locator('.bg-image-delete').getAttribute('aria-label'), 'Delete 示例壁纸.webp');
+    assert.match(await page.locator('#bgUploadHint').textContent(), /Up to 8 MB per image/);
+    await page.locator('#bgSettingsForm').evaluate(form => { form.scrollTop = form.scrollHeight; });
+    await page.waitForFunction(() => !document.querySelector('.notification'));
+    await captureScreenshot(page, 'english-library.png');
+    await page.locator('#bgSolidColorHex').fill('oops');
+    assert.equal(await page.locator('#bgSolidColorHex').evaluate(input => input.validationMessage), 'Enter a valid hexadecimal color.');
+    await page.locator('#interfaceLanguage').selectOption('zh-CN');
+    assert.equal(await page.locator('#bgSolidColorHex').inputValue(), 'oops');
+    assert.equal(await page.locator('#bgSolidColorHex').evaluate(input => input.validationMessage), '请输入有效的十六进制颜色');
+    assert.equal(await page.locator('#bgApplyBtn').isDisabled(), true);
+    await page.locator('#bgCancelBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    assert.equal(await storedLanguage(page), null);
+});
+
+test('英文设置、长引擎名称和弹窗在桌面与窄屏均可完整操作', async t => {
+    const { page } = await openPage(t, englishFixture());
+    await saveEnglish(page);
+    await page.waitForFunction(() => !document.querySelector('.notification'));
+    await openSettings(page);
+    await page.locator('#bgModeSelect').selectOption('gradient');
+    await page.getByRole('button', { name: 'Pine forest', exact: true }).click();
+    await waitForSettingsSave(page);
+    await page.locator('#bgSettingsForm').evaluate(form => { form.scrollTop = 0; });
+    await captureScreenshot(page, 'english-settings.png');
+    await page.locator('#bgCancelBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    await page.setViewportSize({ width: 360, height: 640 });
+    await page.locator('#searchEngineBtn').click();
+    await page.getByRole('option', { name: 'DuckDuckGo', exact: true }).click();
+    assert.equal(await page.locator('#currentEngine').evaluate(element => element.scrollWidth <= element.clientWidth), true);
+    await page.locator('#addShortcutBtn').click();
+    const modal = await page.locator('.modal-content').boundingBox();
+    assert.ok(modal.x >= 0 && modal.x + modal.width <= 360);
+    await page.locator('#cancelShortcutBtn').click();
+    await page.locator('#addShortcutModal').waitFor({ state: 'hidden' });
+    await openSettings(page);
+    await page.locator('#bgModeSelect').selectOption('gradient');
+    await page.getByRole('button', { name: 'Pine forest', exact: true }).click();
+    await waitForSettingsSave(page);
+    await page.locator('#bgSettingsForm').evaluate(form => { form.scrollTop = 0; });
+    await captureScreenshot(page, 'english-settings-mobile.png');
+    for (const width of [360, 320]) {
+        await page.setViewportSize({ width, height: 560 });
+        const footer = await page.locator('.bg-settings-footer').boundingBox();
+        await page.locator('#bgSettingsForm').evaluate(form => { form.scrollTop = form.scrollHeight; });
+        assert.deepEqual(await page.locator('.bg-settings-footer').boundingBox(), footer);
+        for (const selector of ['#bgResetBtn', '#bgCancelBtn', '#bgApplyBtn']) {
+            const box = await page.locator(selector).boundingBox();
+            assert.ok(box.x >= 0 && box.x + box.width <= width && box.y >= 0 && box.y + box.height <= 560);
+        }
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+        assert.equal(await page.locator('#bgSettingsForm').evaluate(form => form.scrollWidth <= form.clientWidth), true);
+    }
+    await page.locator('#bgCancelBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    await cards(page).first().hover();
+    await cards(page).first().locator('.shortcut-edit').click();
+    await page.locator('#shortcutName').fill('A'.repeat(60));
+    await page.locator('#submitBtn').click();
+    await page.locator('#addShortcutModal').waitFor({ state: 'hidden' });
+    await page.locator('#addShortcutBtn').click();
+    await page.locator('#shortcutName').fill('Duplicate');
+    await page.locator('#shortcutUrl').fill('https://shortcut-1.example/');
+    await page.locator('#submitBtn').click();
+    const notification = page.locator('.notification').filter({ hasText: 'already uses this URL' });
+    await notification.waitFor({ state: 'visible' });
+    assert.equal(await notification.evaluate(element => element.scrollWidth <= element.clientWidth), true);
 });

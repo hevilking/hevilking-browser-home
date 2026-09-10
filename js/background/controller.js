@@ -53,7 +53,7 @@ export class BackgroundController {
             pending: Boolean(this.pendingBackground),
             changed: Boolean(preview && (!sameBackgroundSettings(preview.settings, this.settings)
                 || (preview.originalCandidate && this.currentSignature !== this.getCandidateSignature(preview.originalCandidate)))),
-            error: preview?.error ? '暂时无法预览背景，请切换模式或稍后重试。' : ''
+            error: preview?.error ? 'settings.previewFailed' : ''
         };
     }
 
@@ -86,7 +86,7 @@ export class BackgroundController {
         return this.pendingBackground || Promise.resolve(this.currentRenderedCandidate);
     }
 
-    async commitPreview() {
+    async commitPreview(persist = saveBackgroundSettings) {
         const preview = this.previewState;
         if (!preview) return false;
         while (this.pendingBackground) {
@@ -95,7 +95,7 @@ export class BackgroundController {
         }
         if (preview.error) throw preview.error;
         // 先完成配置写入；失败时保留草稿，允许重试或取消。
-        const saved = saveBackgroundSettings(preview.settings);
+        const saved = persist(preview.settings);
         this.settings = saved;
         this.previewState = null;
         if (preview.originalCandidate !== this.currentRenderedCandidate) this.releaseCandidate(preview.originalCandidate);
@@ -144,7 +144,7 @@ export class BackgroundController {
             });
         }
         if (refreshBackground && isImageMode(this.effectiveSettings().mode)) {
-            this.nextBackground({ silent: true }).catch(() => this.options.onStatus?.('图片已删除，背景暂时无法更新'));
+            this.nextBackground({ silent: true }).catch(() => this.options.onStatus?.('wallpaper.deletedUnavailable'));
         }
     }
 
@@ -213,7 +213,7 @@ export class BackgroundController {
                         return null;
                     }
                     this.showCandidate(ready, { persist: !this.previewState, immediate: Boolean(this.previewState) });
-                    if (!silent) this.options.onStatus?.('背景已更新');
+                    if (!silent) this.options.onStatus?.('wallpaper.updated');
                     return ready;
                 } catch (error) {
                     if (ready && ready !== this.currentRenderedCandidate) this.releaseCandidate(ready);

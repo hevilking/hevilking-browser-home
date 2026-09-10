@@ -1244,6 +1244,7 @@ body {
     font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
     letter-spacing: 0.5px;
     max-width: min(60vw, 520px);
+    overflow-wrap: anywhere;
     text-align: center;
     line-height: 1.35;
 }
@@ -1364,8 +1365,7 @@ body {
 /* 搜索引擎下拉选择 */
 .search-engine-picker {
     position: relative;
-    flex: 0 0 152px;
-    width: 152px;
+    flex: 0 0 auto;
     margin-left: 6px;
     z-index: 3;
 }
@@ -1374,7 +1374,8 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
-    width: 100%;
+    /* 宽度随当前引擎名称变化，保持图标、文字和箭头之间的间距一致。 */
+    width: max-content;
     height: 40px;
     padding: 0 10px;
     border: 1px solid rgba(255, 255, 255, 0.2);
@@ -1498,11 +1499,6 @@ body {
 }
 
 @media (max-width: 600px) {
-    .search-engine-picker {
-        flex-basis: 128px;
-        width: 128px;
-    }
-
     .search-engine-btn {
         height: 36px;
         padding: 0 8px;
@@ -1513,8 +1509,6 @@ body {
 
 @media (max-width: 480px) {
     .search-engine-picker {
-        flex-basis: 116px;
-        width: 116px;
         margin-left: 5px;
     }
 }

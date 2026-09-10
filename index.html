@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>让我们开始吧</title>
+    <title data-i18n="app.title">让我们开始吧</title>
     <link rel="stylesheet" href="css/style.css">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https://api.bing.com https://www.bing.com https://suggestqueries.google.com https://www.baidu.com https://suggestion.baidu.com https://duckduckgo.com;">
+    <script type="module" src="js/main.js?v=3.0" blocking="render"></script>
 </head>
 <body>
     <!-- 背景系统 -->
@@ -19,14 +20,14 @@
     <div class="container">
         <!-- 壁纸切换按钮 -->
         <div class="wallpaper-controls">
-            <div class="wallpaper-switch" id="wallpaperSwitch">
+            <div class="wallpaper-switch" id="wallpaperSwitch" title="切换壁纸" data-i18n-title="wallpaper.next" aria-label="切换壁纸" data-i18n-aria-label="wallpaper.next">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                     <circle cx="8.5" cy="8.5" r="1.5"></circle>
                     <polyline points="21 15 16 10 5 21"></polyline>
                 </svg>
             </div>
-            <button class="wallpaper-settings-btn" id="wallpaperSettingsBtn" type="button" title="背景与外观" aria-label="背景与外观设置" aria-controls="bgSettingsPanel" aria-expanded="false">
+            <button class="wallpaper-settings-btn" id="wallpaperSettingsBtn" type="button" title="设置" data-i18n-title="common.settings" aria-label="设置" data-i18n-aria-label="common.settings" aria-controls="bgSettingsPanel" aria-expanded="false">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="3"></circle>
                     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.33 1V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-.33-1 1.65 1.65 0 0 0-1-.6 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1-.33H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1-.33 1.65 1.65 0 0 0 .6-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6 1.65 1.65 0 0 0 .33-1V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 .33 1 1.65 1.65 0 0 0 1 .6 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.24.3.44.64.6 1 .12.33.18.68.18 1.03s-.06.7-.18 1.03c-.16.36-.36.7-.6 1z"></path>
@@ -39,18 +40,18 @@
             <div class="search-box">
                 <!-- 搜索引擎下拉选择 -->
                 <div class="search-engine-picker" id="searchEnginePicker">
-                    <button class="search-engine-btn" id="searchEngineBtn" type="button" data-engine="Bing" aria-label="搜索引擎：Bing" aria-haspopup="listbox" aria-controls="searchEngineDropdown" aria-expanded="false">
+                    <button class="search-engine-btn" id="searchEngineBtn" type="button" data-engine="Bing" aria-label="搜索引擎" data-i18n-aria-label="search.engine" aria-haspopup="listbox" aria-controls="searchEngineDropdown" aria-expanded="false">
                         <span class="engine-icon" id="currentEngineIcon" aria-hidden="true">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
                             <path fill="#00809D" d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
                             </svg>
                         </span>
-                        <span class="engine-name" id="currentEngine">Bing</span>
+                        <span class="engine-name" id="currentEngine" data-i18n="search.bing">Bing</span>
                         <svg class="search-engine-chevron" aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="6 9 12 15 18 9"></polyline>
                         </svg>
                     </button>
-                    <div class="search-engine-dropdown" id="searchEngineDropdown" role="listbox" aria-label="搜索引擎" hidden>
+                    <div class="search-engine-dropdown" id="searchEngineDropdown" role="listbox" aria-label="搜索引擎" data-i18n-aria-label="search.engine" hidden>
                         <button class="engine-option" type="button" role="option" aria-selected="false" tabindex="-1" data-engine="Google" data-url="https://www.google.com/search?q=">
                             <span class="engine-icon" aria-hidden="true">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
@@ -60,7 +61,7 @@
                                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                                 </svg>
                             </span>
-                            <span class="engine-name">Google</span>
+                            <span class="engine-name" data-i18n="search.google">Google</span>
                             <svg class="engine-check" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="5 12 9 16 19 6"></polyline>
                             </svg>
@@ -71,7 +72,7 @@
                                 <path fill="#00809D" d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
                                 </svg>
                             </span>
-                            <span class="engine-name">Bing</span>
+                            <span class="engine-name" data-i18n="search.bing">Bing</span>
                             <svg class="engine-check" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="5 12 9 16 19 6"></polyline>
                             </svg>
@@ -83,7 +84,7 @@
                                 <path fill="#2932E1" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
                                 </svg>
                             </span>
-                            <span class="engine-name">百度</span>
+                            <span class="engine-name" data-i18n="search.baidu">百度</span>
                             <svg class="engine-check" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="5 12 9 16 19 6"></polyline>
                             </svg>
@@ -95,7 +96,7 @@
                                 <circle cx="12" cy="12" r="5" fill="#DE5833"/>
                                 </svg>
                             </span>
-                            <span class="engine-name">DuckDuckGo</span>
+                            <span class="engine-name" data-i18n="search.duckduckgo">DuckDuckGo</span>
                             <svg class="engine-check" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="5 12 9 16 19 6"></polyline>
                             </svg>
@@ -113,10 +114,10 @@
                 
                 <!-- 搜索输入框 -->
                 <div class="search-input-wrapper">
-                    <input type="text" class="search-input" id="searchInput" placeholder="搜索互联网...">
+                    <input type="text" class="search-input" id="searchInput" aria-label="搜索" data-i18n-aria-label="search.submit" placeholder="搜索互联网..." data-i18n-placeholder="search.placeholder">
                     <!-- 搜索历史记录开关 -->
-                    <div class="search-history-toggle" id="searchHistoryToggle" title="搜索历史记录">
-                        <input type="checkbox" id="searchHistorySwitch" class="search-history-switch">
+                    <div class="search-history-toggle" id="searchHistoryToggle" title="搜索历史记录" data-i18n-title="search.historyToggle">
+                        <input type="checkbox" id="searchHistorySwitch" aria-label="搜索历史记录" data-i18n-aria-label="search.historyToggle" class="search-history-switch">
                         <label for="searchHistorySwitch" class="toggle-label">
                             <span class="toggle-slider"></span>
                         </label>
@@ -124,8 +125,8 @@
                     <!-- 搜索历史记录下拉框 -->
                     <div class="search-history-dropdown" id="searchHistoryDropdown">
                         <div class="search-history-header">
-                            <h4>搜索历史</h4>
-                            <button class="clear-history-btn" id="clearHistoryBtn">清除全部</button>
+                            <h4 data-i18n="search.history">搜索历史</h4>
+                            <button class="clear-history-btn" id="clearHistoryBtn" data-i18n="search.clearHistory">清除全部</button>
                         </div>
                         <div class="search-history-list" id="searchHistoryList">
                             <!-- 搜索历史记录将通过JavaScript动态添加 -->
@@ -134,7 +135,7 @@
                     <!-- 联想搜索下拉框 -->
                     <div class="search-suggestions-dropdown" id="searchSuggestionsDropdown">
                         <div class="search-suggestions-header">
-                            <h4>联想搜索</h4>
+                            <h4 data-i18n="search.suggestions">联想搜索</h4>
                         </div>
                         <div class="search-suggestions-list" id="searchSuggestionsList">
                             <!-- 联想词将通过JavaScript动态添加 -->
@@ -143,7 +144,7 @@
                 </div>
                 
                 <!-- 搜索按钮 -->
-                <button class="search-button" id="searchButton">
+                <button class="search-button" id="searchButton" aria-label="搜索" data-i18n-aria-label="search.submit">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M5 12h14M12 5l7 7-7 7"></path>
                     </svg>
@@ -155,52 +156,52 @@
         <div class="shortcuts-container">
             <div class="shortcuts-header">
                 <div class="shortcut-heading">
-                    <h3>快捷方式</h3>
+                    <h3 data-i18n="shortcuts.title">快捷方式</h3>
                     <span class="shortcut-sort-feedback" id="shortcutSortFeedback" aria-hidden="true" hidden></span>
                 </div>
                 <div class="header-actions">
                     <div class="shortcut-sort-help-anchor">
-                        <button class="shortcut-action-btn" id="dragHintBtn" type="button" aria-label="排序操作说明" aria-describedby="shortcutSortHelp" aria-controls="shortcutSortHelp" aria-expanded="false">
+                        <button class="shortcut-action-btn" id="dragHintBtn" type="button" aria-label="排序操作说明" data-i18n-aria-label="sort.help" aria-describedby="shortcutSortHelp" aria-controls="shortcutSortHelp" aria-expanded="false">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="8 6 2 12 8 18"></polyline>
                                 <polyline points="16 6 22 12 16 18"></polyline>
                             </svg>
                         </button>
                         <div class="shortcut-sort-help" id="shortcutSortHelp" role="tooltip" hidden>
-                            <p class="shortcut-sort-help-title" id="shortcutSortHelpTitle">调整快捷方式</p>
-                            <p id="shortcutSortHelpPointer">按住鼠标左键拖动卡片，松手放置；移到区域外松手可取消。</p>
+                            <p class="shortcut-sort-help-title" id="shortcutSortHelpTitle" data-i18n="sort.title">调整快捷方式</p>
+                            <p id="shortcutSortHelpPointer" data-i18n="sort.pointerHint">按住鼠标左键拖动卡片，松手放置；移到区域外松手可取消。</p>
                         </div>
                     </div>
-                    <button class="shortcut-action-btn" id="copyShortcutMetaBtn" type="button" aria-label="复制快捷方式元数据" title="复制快捷方式元数据">
+                    <button class="shortcut-action-btn" id="copyShortcutMetaBtn" type="button" aria-label="复制快捷方式元数据" data-i18n-aria-label="shortcuts.copy" title="复制快捷方式元数据" data-i18n-title="shortcuts.copy">
                         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                         </svg>
                     </button>
-                    <button class="shortcut-action-btn" id="importShortcutMetaBtn" type="button" aria-label="导入快捷方式元数据" title="导入快捷方式元数据">
+                    <button class="shortcut-action-btn" id="importShortcutMetaBtn" type="button" aria-label="导入快捷方式元数据" data-i18n-aria-label="shortcuts.import" title="导入快捷方式元数据" data-i18n-title="shortcuts.import">
                         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="7 10 12 15 17 10"></polyline>
                             <line x1="12" y1="15" x2="12" y2="3"></line>
                         </svg>
                     </button>
-                    <button class="shortcut-action-btn" id="shortcutSearchBtn" type="button" aria-label="搜索快捷方式" title="搜索快捷方式">
+                    <button class="shortcut-action-btn" id="shortcutSearchBtn" type="button" aria-label="搜索快捷方式" data-i18n-aria-label="shortcuts.search" title="搜索快捷方式" data-i18n-title="shortcuts.search">
                         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="11" cy="11" r="8"></circle>
                             <path d="m21 21-4.35-4.35"></path>
                         </svg>
                     </button>
                     <div class="shortcut-search-wrapper" id="shortcutSearchWrapper">
-                        <input type="text" class="shortcut-search-input" id="shortcutSearchInput" placeholder="搜索快捷方式...">
-                        <button class="shortcut-search-clear" id="clearShortcutSearchBtn" type="button" aria-label="清除搜索" title="清除搜索" hidden>×</button>
+                        <input type="text" class="shortcut-search-input" id="shortcutSearchInput" placeholder="搜索快捷方式..." data-i18n-placeholder="shortcuts.searchPlaceholder">
+                        <button class="shortcut-search-clear" id="clearShortcutSearchBtn" type="button" aria-label="清除搜索" data-i18n-aria-label="shortcuts.clearSearch" title="清除搜索" data-i18n-title="shortcuts.clearSearch" hidden>×</button>
                     </div>
-                    <button class="add-shortcut-btn" id="addShortcutBtn">+</button>
+                    <button class="add-shortcut-btn" id="addShortcutBtn" aria-label="添加快捷方式" data-i18n-aria-label="shortcuts.add" title="添加快捷方式" data-i18n-title="shortcuts.add">+</button>
                 </div>
             </div>
-            <div class="shortcuts" id="shortcuts" role="list" aria-label="网站快捷方式">
+            <div class="shortcuts" id="shortcuts" role="list" aria-label="快捷方式" data-i18n-aria-label="shortcuts.title">
                 <!-- 快捷方式将通过JavaScript动态添加 -->
             </div>
-            <p class="visually-hidden" id="shortcutSortDescription">按住鼠标左键拖动卡片，松手放置；移到区域外松手可取消。</p>
+            <p class="visually-hidden" id="shortcutSortDescription" data-i18n="sort.pointerHint">按住鼠标左键拖动卡片，松手放置；移到区域外松手可取消。</p>
             <div class="visually-hidden" id="shortcutSortStatus" role="status" aria-live="polite" aria-atomic="true"></div>
         </div>
         
@@ -211,8 +212,8 @@
         <div class="modal-backdrop"></div>
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="modalTitle">添加快捷方式</h2>
-                <button class="close-btn" id="closeModal" type="button" aria-label="关闭弹窗">
+                <h2 id="modalTitle" data-i18n="shortcuts.add">添加快捷方式</h2>
+                <button class="close-btn" id="closeModal" type="button" aria-label="关闭弹窗" data-i18n-aria-label="common.closeDialog">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -222,16 +223,16 @@
             <div class="modal-body">
                 <form id="shortcutForm">
                     <div class="form-group">
-                        <label for="shortcutName">名称</label>
-                        <input type="text" id="shortcutName" placeholder="输入网站名称" required>
+                        <label for="shortcutName" data-i18n="shortcuts.name">名称</label>
+                        <input type="text" id="shortcutName" placeholder="输入网站名称" data-i18n-placeholder="shortcuts.namePlaceholder" required>
                     </div>
                     <div class="form-group">
-                        <label for="shortcutUrl">网址</label>
+                        <label for="shortcutUrl" data-i18n="shortcuts.url">网址</label>
                         <input type="url" id="shortcutUrl" placeholder="https://example.com" required>
                     </div>
                     <div class="modal-actions">
-                        <button type="button" class="cancel-btn" id="cancelShortcutBtn">取消</button>
-                        <button type="submit" class="submit-btn" id="submitBtn">添加</button>
+                        <button type="button" class="cancel-btn" id="cancelShortcutBtn" data-i18n="common.cancel">取消</button>
+                        <button type="submit" class="submit-btn" id="submitBtn" data-i18n="common.add">添加</button>
                     </div>
                 </form>
             </div>
@@ -240,79 +241,89 @@
 
     <!-- 撤销浮层独立于玻璃容器，不占用网格布局空间。 -->
     <div class="shortcut-sort-undo" id="shortcutSortUndo" hidden>
-        <span>顺序已调整</span>
-        <button class="shortcut-sort-action" id="undoShortcutSortBtn" type="button">撤销</button>
+        <span data-i18n="sort.changed">顺序已调整</span>
+        <button class="shortcut-sort-action" id="undoShortcutSortBtn" type="button" data-i18n="sort.undo">撤销</button>
     </div>
 
-    <!-- 背景与外观设置：预览草稿，保存后生效。 -->
+    <!-- 通用与背景设置：预览草稿，保存后生效。 -->
     <aside class="bg-settings-panel" id="bgSettingsPanel" aria-labelledby="bgSettingsTitle" aria-hidden="true" inert>
         <div class="bg-settings-header">
             <div class="bg-settings-title">
-                <h3 id="bgSettingsTitle">背景与外观</h3>
-                <span class="bg-settings-state" id="bgSettingsState" hidden>未保存</span>
+                <h3 id="bgSettingsTitle" data-i18n="common.settings">设置</h3>
+                <span class="bg-settings-state" id="bgSettingsState" hidden data-i18n="settings.unsaved">未保存</span>
             </div>
-            <button class="bg-settings-close" id="bgSettingsClose" type="button" aria-label="关闭背景设置">
+            <button class="bg-settings-close" id="bgSettingsClose" type="button" aria-label="关闭设置" data-i18n-aria-label="common.closeSettings">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg>
             </button>
         </div>
         <form class="bg-settings-body" id="bgSettingsForm">
             <fieldset id="bgSettingsFields">
                 <section class="bg-settings-section">
-                    <h4>背景来源</h4>
+                    <h4 data-i18n="settings.general">通用</h4>
                     <div class="bg-setting-control">
-                        <label for="bgModeSelect">背景模式</label>
+                        <label for="interfaceLanguage" data-i18n="settings.language">界面语言</label>
+                        <select id="interfaceLanguage">
+                            <option value="zh-CN" lang="zh-CN">简体中文</option>
+                            <option value="en" lang="en">English</option>
+                        </select>
+                    </div>
+                </section>
+                <section class="bg-settings-section">
+                    <h4 data-i18n="settings.source">背景来源</h4>
+                    <div class="bg-setting-control">
+                        <label for="bgModeSelect" data-i18n="settings.mode">背景模式</label>
                         <select id="bgModeSelect" data-setting="mode">
-                            <option value="mixed">本地与在线</option>
-                            <option value="local">本地图片</option>
-                            <option value="online">在线壁纸</option>
-                            <option value="gradient">渐变</option>
-                            <option value="solid">纯色</option>
+                            <option value="mixed" data-i18n="settings.mixed">本地与在线</option>
+                            <option value="local" data-i18n="settings.local">本地图片</option>
+                            <option value="online" data-i18n="settings.online">在线壁纸</option>
+                            <option value="gradient" data-i18n="settings.gradient">渐变</option>
+                            <option value="solid" data-i18n="settings.solid">纯色</option>
                         </select>
                     </div>
                     <div class="bg-setting-control" id="bgSolidColorRow" hidden>
-                        <label for="bgSolidColorHex">背景颜色</label>
+                        <label for="bgSolidColorHex" data-i18n="settings.color">背景颜色</label>
                         <div class="bg-color-control">
-                            <input type="color" id="bgSolidColor" data-setting="solidColor" aria-label="选择背景颜色">
+                            <input type="color" id="bgSolidColor" data-setting="solidColor" aria-label="选择背景颜色" data-i18n-aria-label="settings.chooseColor">
                             <input type="text" id="bgSolidColorHex" data-setting="solidColor" placeholder="#1f2937" maxlength="7" spellcheck="false" autocomplete="off" required>
                         </div>
                     </div>
                     <div class="bg-setting-control" id="bgGradientRow" hidden>
-                        <span class="bg-setting-caption">渐变预设</span>
+                        <span class="bg-setting-caption" data-i18n="settings.presets">渐变预设</span>
                         <div class="bg-gradient-presets" id="bgGradientPresets"></div>
                     </div>
                 </section>
                 <section class="bg-settings-section" id="bgRotationSection">
-                    <h4>自动轮播</h4>
+                    <h4 data-i18n="settings.rotation">自动轮播</h4>
                     <div class="bg-toggle-row">
-                        <label for="bgAutoRotate">自动切换背景</label>
+                        <label for="bgAutoRotate" data-i18n="settings.autoRotate">自动切换背景</label>
                         <label class="bg-switch">
-                            <input class="visually-hidden" type="checkbox" id="bgAutoRotate" data-setting="autoRotate" role="switch" aria-label="自动切换背景">
+                            <input class="visually-hidden" type="checkbox" id="bgAutoRotate" data-setting="autoRotate" role="switch" aria-label="自动切换背景" data-i18n-aria-label="settings.autoRotate">
                             <span class="bg-switch-track" aria-hidden="true"></span>
                         </label>
                     </div>
                     <div class="bg-setting-control" id="bgRotateIntervalRow" hidden>
-                        <label for="bgRotatePreset">切换间隔</label>
+                        <label for="bgRotatePreset" data-i18n="settings.interval">切换间隔</label>
                         <select id="bgRotatePreset">
-                            <option value="30">30 秒</option>
-                            <option value="60">1 分钟</option>
-                            <option value="180">3 分钟</option>
-                            <option value="300">5 分钟</option>
-                            <option value="600">10 分钟</option>
-                            <option value="custom">自定义</option>
+                            <option value="30" data-i18n="settings.seconds30">30 秒</option>
+                            <option value="60" data-i18n="settings.minute1">1 分钟</option>
+                            <option value="180" data-i18n="settings.minutes3">3 分钟</option>
+                            <option value="300" data-i18n="settings.minutes5">5 分钟</option>
+                            <option value="600" data-i18n="settings.minutes10">10 分钟</option>
+                            <option value="custom" data-i18n="settings.custom">自定义</option>
                         </select>
                         <div class="bg-interval-custom" id="bgRotateCustomRow" hidden>
-                            <input type="number" id="bgRotateInterval" data-setting="rotateIntervalSec" min="10" max="1800" step="10" required aria-label="自定义轮播间隔">
-                            <span>秒</span>
+                            <input type="number" id="bgRotateInterval" data-setting="rotateIntervalSec" min="10" max="1800" step="10" required aria-label="自定义轮播间隔" data-i18n-aria-label="settings.customInterval">
+                            <span data-i18n="settings.seconds">秒</span>
                         </div>
                     </div>
                 </section>
                 <section class="bg-settings-section">
-                    <h4>外观效果</h4>
+                    <h4 data-i18n="settings.appearance">外观效果</h4>
                         <div class="bg-setting-control">
                             <div class="bg-setting-label">
-                                <label for="bgOverlayOpacity">背景压暗</label>
+                                <label for="bgOverlayOpacity" data-i18n="settings.dim">背景压暗</label>
                                 <div class="bg-number-control">
-                                    <input type="number" id="bgOverlayOpacityValue" data-setting="overlayOpacity" min="0" max="70" step="1" required aria-label="背景压暗数值">
+                                    <input type="number" id="bgOverlayOpacityValue" data-setting="overlayOpacity" min="0" max="70" step="1" required aria-label="背景压暗数值" data-i18n-aria-label="settings.dimValue">
                                     <span>%</span>
                                 </div>
                             </div>
@@ -320,9 +331,9 @@
                         </div>
                         <div class="bg-setting-control" id="bgImageBlurRow">
                             <div class="bg-setting-label">
-                                <label for="bgBlur">背景模糊</label>
+                                <label for="bgBlur" data-i18n="settings.blur">背景模糊</label>
                                 <div class="bg-number-control">
-                                    <input type="number" id="bgBlurValue" data-setting="filters.blur" min="0" max="20" step="1" required aria-label="背景模糊数值">
+                                    <input type="number" id="bgBlurValue" data-setting="filters.blur" min="0" max="20" step="1" required aria-label="背景模糊数值" data-i18n-aria-label="settings.blurValue">
                                     <span>px</span>
                                 </div>
                             </div>
@@ -330,22 +341,22 @@
                         </div>
                         <div class="bg-setting-control">
                             <div class="bg-setting-label">
-                                <label for="bgUiGlassBlur">卡片毛玻璃</label>
+                                <label for="bgUiGlassBlur" data-i18n="settings.glass">卡片毛玻璃</label>
                                 <div class="bg-number-control">
-                                    <input type="number" id="bgUiGlassBlurValue" data-setting="uiGlassBlur" min="0" max="30" step="1" required aria-label="卡片毛玻璃数值">
+                                    <input type="number" id="bgUiGlassBlurValue" data-setting="uiGlassBlur" min="0" max="30" step="1" required aria-label="卡片毛玻璃数值" data-i18n-aria-label="settings.glassValue">
                                     <span>px</span>
                                 </div>
                             </div>
                             <input type="range" id="bgUiGlassBlur" data-setting="uiGlassBlur" min="0" max="30" step="1">
                         </div>
                     <details class="bg-advanced-settings" id="bgAdvancedSettings">
-                        <summary>高级调节</summary>
+                        <summary data-i18n="settings.advanced">高级调节</summary>
                         <div class="bg-advanced-body">
                         <div class="bg-setting-control">
                             <div class="bg-setting-label">
-                                <label for="bgBrightness">亮度</label>
+                                <label for="bgBrightness" data-i18n="settings.brightness">亮度</label>
                                 <div class="bg-number-control">
-                                    <input type="number" id="bgBrightnessValue" data-setting="filters.brightness" min="60" max="140" step="1" required aria-label="亮度数值">
+                                    <input type="number" id="bgBrightnessValue" data-setting="filters.brightness" min="60" max="140" step="1" required aria-label="亮度数值" data-i18n-aria-label="settings.brightnessValue">
                                     <span>%</span>
                                 </div>
                             </div>
@@ -353,9 +364,9 @@
                         </div>
                         <div class="bg-setting-control">
                             <div class="bg-setting-label">
-                                <label for="bgSaturate">饱和度</label>
+                                <label for="bgSaturate" data-i18n="settings.saturation">饱和度</label>
                                 <div class="bg-number-control">
-                                    <input type="number" id="bgSaturateValue" data-setting="filters.saturate" min="50" max="180" step="1" required aria-label="饱和度数值">
+                                    <input type="number" id="bgSaturateValue" data-setting="filters.saturate" min="50" max="180" step="1" required aria-label="饱和度数值" data-i18n-aria-label="settings.saturationValue">
                                     <span>%</span>
                                 </div>
                             </div>
@@ -363,9 +374,9 @@
                         </div>
                         <div class="bg-setting-control">
                             <div class="bg-setting-label">
-                                <label for="bgContrast">对比度</label>
+                                <label for="bgContrast" data-i18n="settings.contrast">对比度</label>
                                 <div class="bg-number-control">
-                                    <input type="number" id="bgContrastValue" data-setting="filters.contrast" min="50" max="150" step="1" required aria-label="对比度数值">
+                                    <input type="number" id="bgContrastValue" data-setting="filters.contrast" min="50" max="150" step="1" required aria-label="对比度数值" data-i18n-aria-label="settings.contrastValue">
                                     <span>%</span>
                                 </div>
                             </div>
@@ -375,14 +386,14 @@
                     </details>
                 </section>
                 <section class="bg-settings-section">
-                    <div class="bg-library-heading"><h4>本地图库</h4><span id="bgLibraryCount">0 / 30</span></div>
-                    <button class="bg-upload-btn" id="bgUploadBtn" type="button"><span aria-hidden="true">＋</span> 添加图片</button>
+                    <div class="bg-library-heading"><h4 data-i18n="gallery.title">本地图库</h4><span id="bgLibraryCount">0 / 30</span></div>
+                    <button class="bg-upload-btn" id="bgUploadBtn" type="button"><span aria-hidden="true">＋</span> <span data-i18n="gallery.add">添加图片</span></button>
                     <input type="file" id="bgUploadInput" accept="image/*" hidden>
                     <div class="bg-library-capacity">
-                        <progress id="bgLibraryUsage" value="0"></progress>
+                        <progress id="bgLibraryUsage" aria-label="本地图库容量" data-i18n-aria-label="gallery.usage" value="0"></progress>
                         <small id="bgUploadHint">0 B / 80 MB · 单张不超过 8 MB</small>
                     </div>
-                    <p class="bg-library-notice">图片仅保存在本机，图库增删立即保存。</p>
+                    <p class="bg-library-notice" data-i18n="gallery.notice">图片仅保存在本机，图库增删立即保存。</p>
                     <div class="bg-uploaded-list" id="bgUploadedList"></div>
                 </section>
             </fieldset>
@@ -391,16 +402,15 @@
         <div class="bg-settings-footer">
             <p class="bg-settings-message" id="bgSettingsMessage" role="status" aria-live="polite" hidden></p>
             <div class="bg-settings-actions">
-                <button type="button" id="bgResetBtn" class="bg-reset-btn">恢复默认</button>
+                <button type="button" id="bgResetBtn" class="bg-reset-btn" data-i18n="common.reset">恢复默认</button>
                 <div>
-                    <button type="button" id="bgCancelBtn" class="bg-cancel-btn">取消</button>
-                    <button type="submit" id="bgApplyBtn" class="bg-save-btn" form="bgSettingsForm" disabled>保存</button>
+                    <button type="button" id="bgCancelBtn" class="bg-cancel-btn" data-i18n="common.cancel">取消</button>
+                    <button type="submit" id="bgApplyBtn" class="bg-save-btn" form="bgSettingsForm" disabled data-i18n="common.save">保存</button>
                 </div>
             </div>
         </div>
     </aside>
 
     
-    <script type="module" src="js/main.js?v=2.0"></script>
 </body>
 </html>

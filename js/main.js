@@ -1,5 +1,6 @@
 import { initBackgroundSystem } from './background/index.js';
-import { createBackgroundSettingsPanel } from './background/settings-panel.js';
+import { createSettingsPanel } from './settings/panel.js';
+import { initializeLanguage, onLanguageChange, setText, setAttributeText, t, LocalizedError } from './i18n/index.js';
 import { ensureShortcutIds, orderShortcuts } from './shortcuts/data.js';
 import { createShortcutSorter } from './shortcuts/sortable.js';
 import { createShortcutSortHelp } from './shortcuts/sort-help.js';
@@ -105,12 +106,15 @@ const SEARCH_SUGGESTION_APIS = {
     ]
 };
 const DEFAULT_SEARCH_ENGINE = 'Bing';
+const SEARCH_ENGINE_LABEL_KEYS = {
+    Google: 'search.google', Bing: 'search.bing', 百度: 'search.baidu', DuckDuckGo: 'search.duckduckgo'
+};
 const SEARCH_ENGINE_STORAGE_KEY = 'defaultSearchEngine';
 
 // 编辑模式相关变量
 let editingShortcutId = null;
 let backgroundController = null;
-let backgroundSettingsPanel = null;
+let settingsPanel = null;
 
 // 默认快捷方式
 const defaultShortcuts = [
@@ -119,6 +123,14 @@ const defaultShortcuts = [
 ];
 
 
+
+// 在首次绘制前应用已保存语言，首次使用固定为简体中文。
+initializeLanguage();
+onLanguageChange(() => {
+    [shortcutName, shortcutUrl].forEach(control => {
+        if (control.validity.customError) updateShortcutValidity(control);
+    });
+});
 
 // 初始化页面
 document.addEventListener('DOMContentLoaded', function() {
@@ -139,7 +151,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             updateShortcutSortControls();
         },
-        announce: (message) => { shortcutSortStatus.textContent = message; }
+        announce: (key, values) => setText(shortcutSortStatus, key, values)
     });
     initSearchHistory();
     setupEventListeners();
@@ -158,12 +170,12 @@ async function setRandomWallpaper() {
     if (!backgroundController) {
         return;
     }
-    showNotification('正在寻觅新的风景...');
+    showNotification('wallpaper.loading');
     try {
         await backgroundController.nextBackground({ silent: true });
     } catch (error) {
         console.error('切换背景失败:', error);
-        showNotification('网络如梦，暂留素雅');
+        showNotification('wallpaper.unavailable');
     }
 }
 
@@ -314,6 +326,8 @@ function setupEventListeners() {
         }
     });
     
+    shortcutForm.addEventListener('invalid', event => updateShortcutValidity(event.target), true);
+    shortcutForm.addEventListener('input', event => updateShortcutValidity(event.target));
     shortcutForm.addEventListener('submit', (e) => {
         e.preventDefault();
         if (editingShortcutId) {
@@ -326,14 +340,14 @@ function setupEventListeners() {
 
 function initBackgroundEngine() {
     backgroundController = initBackgroundSystem({
-        onStatus: message => showNotification(message),
-        onPreviewChange: () => backgroundSettingsPanel?.refreshState()
+        onStatus: showNotification,
+        onPreviewChange: () => settingsPanel?.refreshState()
     });
-    backgroundSettingsPanel = createBackgroundSettingsPanel({
+    settingsPanel = createSettingsPanel({
         controller: backgroundController,
         panel: bgSettingsPanel,
         trigger: wallpaperSettingsBtn,
-        onStatus: message => showNotification(message)
+        onStatus: showNotification
     });
     backgroundController.init().catch(error => {
         console.error('初始化背景系统失败:', error);
@@ -341,10 +355,10 @@ function initBackgroundEngine() {
 }
 
 // 显示通知
-function showNotification(message) {
+function showNotification(key, values) {
     const notification = document.createElement('div');
     notification.className = 'notification';
-    notification.textContent = message;
+    setText(notification, key, values);
     
     document.body.appendChild(notification);
     
@@ -448,12 +462,12 @@ function parseShortcutsMetadata(text) {
     try {
         parsed = JSON.parse(text);
     } catch (error) {
-        throw new Error('元数据不是有效 JSON');
+        throw new LocalizedError('metadata.invalidJson');
     }
 
     const rawShortcuts = Array.isArray(parsed) ? parsed : parsed && parsed.shortcuts;
     if (!Array.isArray(rawShortcuts)) {
-        throw new Error('元数据格式错误：需要 shortcuts 数组');
+        throw new LocalizedError('metadata.invalidFormat');
     }
 
     const normalized = rawShortcuts
@@ -461,7 +475,7 @@ function parseShortcutsMetadata(text) {
         .filter(Boolean);
 
     if (normalized.length === 0) {
-        throw new Error('元数据中没有可导入的快捷方式');
+        throw new LocalizedError('metadata.empty');
     }
 
     return normalized;
@@ -473,15 +487,15 @@ async function copyShortcutsMetadata() {
 
     try {
         await navigator.clipboard.writeText(text);
-        showNotification(`已复制 ${metadata.shortcuts.length} 个快捷方式元数据`);
+        showNotification('metadata.copied', { count: metadata.shortcuts.length });
     } catch (error) {
-        window.prompt('复制失败，请手动复制下方元数据：', text);
-        showNotification('剪贴板不可用，已改为手动复制');
+        window.prompt(t('metadata.manualCopy'), text);
+        showNotification('metadata.clipboardUnavailable');
     }
 }
 
 function importShortcutsMetadata() {
-    const input = window.prompt('请粘贴快捷方式元数据（JSON）');
+    const input = window.prompt(t('metadata.paste'));
     if (!input || !input.trim()) {
         return;
     }
@@ -490,7 +504,7 @@ function importShortcutsMetadata() {
     try {
         importedShortcuts = parseShortcutsMetadata(input.trim());
     } catch (error) {
-        showNotification(error.message || '元数据格式校验失败');
+        showNotification(error.key || 'metadata.invalid', error.values);
         return;
     }
 
@@ -513,9 +527,7 @@ function importShortcutsMetadata() {
 
     if (!saveAndRenderShortcuts(merged)) return;
     const added = merged.length - current.length;
-    showNotification(added > 0
-        ? `导入完成，新增 ${added} 个快捷方式`
-        : `导入完成，${skipped} 个快捷方式已存在，无新增`);
+    showNotification(added > 0 ? 'metadata.added' : 'metadata.skipped', { count: added || skipped });
 }
 
 // 执行搜索
@@ -641,7 +653,7 @@ function handleSearchInputKeydown(e) {
 }
 
 function getCurrentEngineName() {
-    return searchEngineBtn.getAttribute('data-engine') || currentEngine.textContent || 'Bing';
+    return searchEngineBtn.dataset.engine || DEFAULT_SEARCH_ENGINE;
 }
 
 function parseSuggestionData(engineName, rawData) {
@@ -718,7 +730,7 @@ function renderSearchSuggestions() {
     if (searchSuggestions.length === 0) {
         const emptyElement = document.createElement('div');
         emptyElement.className = 'search-suggestions-empty';
-        emptyElement.textContent = '暂无联想词';
+        setText(emptyElement, 'search.noSuggestions');
         searchSuggestionsList.appendChild(emptyElement);
         return;
     }
@@ -817,11 +829,11 @@ function selectSearchEngine(element, { persist = true } = {}) {
     cancelSearchSuggestionRequest();
     const engineName = element.dataset.engine;
     currentSearchEngineUrl = element.dataset.url;
-    currentEngine.textContent = engineName;
+    setText(currentEngine, SEARCH_ENGINE_LABEL_KEYS[engineName]);
     currentEngineIcon.replaceChildren(element.querySelector('.engine-icon svg').cloneNode(true));
     searchEngineBtn.dataset.engine = engineName;
-    searchEngineBtn.setAttribute('aria-label', `搜索引擎：${engineName}`);
-    searchEngineBtn.title = engineName;
+    setAttributeText(searchEngineBtn, 'aria-label', 'search.selectedEngine', () => ({ name: t(SEARCH_ENGINE_LABEL_KEYS[engineName]) }));
+    setAttributeText(searchEngineBtn, 'title', SEARCH_ENGINE_LABEL_KEYS[engineName]);
     engineOptions.forEach(option => {
         option.setAttribute('aria-selected', String(option === element));
         option.tabIndex = option === element ? 0 : -1;
@@ -830,7 +842,7 @@ function selectSearchEngine(element, { persist = true } = {}) {
         try {
             localStorage.setItem(SEARCH_ENGINE_STORAGE_KEY, engineName);
         } catch {
-            showNotification('搜索引擎已切换，但暂时无法保存默认设置');
+            showNotification('search.engineSaveFailed');
         }
     }
 }
@@ -855,7 +867,7 @@ function renderShortcuts(shortcutsList) {
     if (!nodes.length) {
         const empty = document.createElement('div');
         empty.className = 'shortcuts-empty';
-        empty.textContent = shortcutSearchInput.value.trim() ? '没有匹配的快捷方式' : '暂无快捷方式，点击右上角 + 添加';
+        setText(empty, shortcutSearchInput.value.trim() ? 'shortcuts.noMatch' : 'shortcuts.empty');
         nodes.push(empty);
     }
 
@@ -906,8 +918,8 @@ function createShortcutElement(shortcut) {
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'shortcut-delete';
     deleteBtn.type = 'button';
-    deleteBtn.setAttribute('aria-label', `删除 ${shortcut.name}`);
-    deleteBtn.title = '删除快捷方式';
+    setAttributeText(deleteBtn, 'aria-label', 'common.deleteNamed', { name: shortcut.name });
+    setAttributeText(deleteBtn, 'title', 'shortcuts.delete');
     deleteBtn.textContent = '×';
     deleteBtn.addEventListener('click', function(e) {
         e.stopPropagation();
@@ -917,8 +929,8 @@ function createShortcutElement(shortcut) {
     const editBtn = document.createElement('button');
     editBtn.className = 'shortcut-edit';
     editBtn.type = 'button';
-    editBtn.setAttribute('aria-label', `编辑 ${shortcut.name}`);
-    editBtn.title = '编辑快捷方式';
+    setAttributeText(editBtn, 'aria-label', 'common.editNamed', { name: shortcut.name });
+    setAttributeText(editBtn, 'title', 'shortcuts.edit');
     editBtn.textContent = '✎';
     editBtn.addEventListener('click', function(e) {
         e.stopPropagation();
@@ -1095,6 +1107,17 @@ async function loadFavicon(iconElement, domain, name) {
     setCachedFavicon(domain, null, FAVICON_CACHE_FAILURE_TTL);
 }
 
+// 自定义校验文案跟随界面语言，输入时清除已经修正的错误。
+function updateShortcutValidity(control) {
+    if (control !== shortcutName && control !== shortcutUrl) return;
+    control.setCustomValidity('');
+    if (control.validity.valueMissing) {
+        control.setCustomValidity(t(control === shortcutName ? 'validation.nameRequired' : 'validation.urlRequired'));
+    } else if (control.validity.typeMismatch) {
+        control.setCustomValidity(t('validation.urlInvalid'));
+    }
+}
+
 // 添加和编辑共用一套开关流程，避免残留表单内容或编辑状态。
 function openShortcutModal(shortcut = null) {
     shortcutSorter?.cancel();
@@ -1103,9 +1126,11 @@ function openShortcutModal(shortcut = null) {
     cancelSearchSuggestionRequest();
     hideAllSearchDropdowns();
     shortcutForm.reset();
+    shortcutName.setCustomValidity('');
+    shortcutUrl.setCustomValidity('');
     editingShortcutId = shortcut?.id || null;
-    modalTitle.textContent = shortcut ? '编辑快捷方式' : '添加快捷方式';
-    submitBtn.textContent = shortcut ? '保存' : '添加';
+    setText(modalTitle, shortcut ? 'shortcuts.edit' : 'shortcuts.add');
+    setText(submitBtn, shortcut ? 'common.save' : 'common.add');
     if (shortcut) {
         shortcutName.value = shortcut.name;
         shortcutUrl.value = shortcut.url;
@@ -1125,9 +1150,11 @@ function closeShortcutModal() {
     addShortcutModal.inert = true;
     addShortcutModal.setAttribute('aria-hidden', 'true');
     shortcutForm.reset();
+    shortcutName.setCustomValidity('');
+    shortcutUrl.setCustomValidity('');
     editingShortcutId = null;
-    modalTitle.textContent = '添加快捷方式';
-    submitBtn.textContent = '添加';
+    setText(modalTitle, 'shortcuts.add');
+    setText(submitBtn, 'common.add');
 }
 
 // 添加快捷方式
@@ -1143,7 +1170,7 @@ function addShortcut() {
         // URL重复检测
         const duplicate = findDuplicateByUrl(shortcutsList, formattedUrl);
         if (duplicate) {
-            showNotification(`该网址已存在快捷方式「${duplicate.name}」`);
+            showNotification('shortcuts.duplicate', { name: duplicate.name });
             return;
         }
 
@@ -1174,13 +1201,13 @@ function saveEditedShortcut() {
         // 编辑和搜索状态共享同一个标识，不依赖当前卡片位置。
         const duplicate = findDuplicateByUrl(shortcutsList, formattedUrl, editingShortcutId);
         if (duplicate) {
-            showNotification(`该网址已存在快捷方式「${duplicate.name}」`);
+            showNotification('shortcuts.duplicate', { name: duplicate.name });
             return;
         }
 
         const index = shortcutsList.findIndex(item => item.id === editingShortcutId);
         if (index < 0) {
-            showNotification('该快捷方式已被删除，请关闭窗口后重试');
+            showNotification('shortcuts.removed');
             return;
         }
         shortcutsList[index] = { ...shortcutsList[index], name, url: formattedUrl };
@@ -1201,7 +1228,7 @@ function persistShortcuts(items) {
         localStorage.setItem('shortcuts', JSON.stringify(items));
         return true;
     } catch {
-        showNotification('暂时无法保存快捷方式，请检查浏览器存储空间后重试');
+        showNotification('shortcuts.saveFailed');
         return false;
     }
 }
@@ -1222,14 +1249,12 @@ function updateShortcutSortControls() {
     const enabled = !searching && allShortcuts.length > 1;
     shortcuts.classList.toggle('is-sort-disabled', !enabled);
 
-    shortcutSortHelpTitle.textContent = searching ? '清除搜索后可排序' : '调整快捷方式';
-    shortcutSortHelpPointer.textContent = searching ? '点击搜索框中的 ×，即可恢复排序。'
-        : !enabled ? '添加更多快捷方式后，即可拖动调整顺序。'
-        : '按住鼠标左键拖动卡片，松手放置；移到区域外松手可取消。';
-    shortcutSortDescription.textContent = shortcutSortHelpPointer.textContent;
+    setText(shortcutSortHelpTitle, searching ? 'sort.searchTitle' : 'sort.title');
+    const hint = searching ? 'sort.searchHint' : !enabled ? 'sort.moreHint' : 'sort.pointerHint';
+    setText(shortcutSortHelpPointer, hint);
+    setText(shortcutSortDescription, hint);
     shortcutSortFeedback.hidden = !shortcutSortState.active;
-    shortcutSortFeedback.textContent = !shortcutSortState.active ? ''
-        : shortcutSortState.inside ? '松手放置' : '松手取消';
+    setText(shortcutSortFeedback, shortcutSortState.inside ? 'sort.drop' : 'sort.cancel');
     const showUndo = Boolean(shortcutUndoState) && !shortcutSortState.active;
     shortcutSortUndo.hidden = !showUndo;
     clearShortcutSearchBtn.hidden = !searching;
@@ -1255,7 +1280,7 @@ function commitShortcutOrder(ids, previousIds, movedId) {
     const current = getSavedShortcuts();
     const ordered = orderShortcuts(current, ids);
     if (!ordered || current.some((item, index) => item.id !== previousIds[index])) {
-        showNotification('快捷方式已在其他页面更新，请重新排序');
+        showNotification('sort.externalUpdate');
         queueMicrotask(() => {
             allShortcuts = getSavedShortcuts();
             dismissShortcutUndo();
@@ -1278,7 +1303,7 @@ function undoShortcutOrder() {
     const ordered = orderShortcuts(current, previousIds);
     if (!ordered || current.some((item, index) => item.id !== ids[index])) {
         dismissShortcutUndo();
-        showNotification('快捷方式已经更新，无法撤销上一次排序');
+        showNotification('sort.undoUnavailable');
         return;
     }
     if (!persistShortcuts(ordered)) return;
@@ -1287,7 +1312,7 @@ function undoShortcutOrder() {
     renderVisibleShortcuts();
     const movedItem = Array.from(shortcuts.children).find(item => item.dataset.shortcutId === movedId);
     movedItem?.querySelector('.shortcut-link').focus({ preventScroll: true });
-    shortcutSortStatus.textContent = '已撤销排序，恢复原顺序。';
+    setText(shortcutSortStatus, 'sort.undone');
 }
 
 // 清除快捷方式搜索状态
@@ -1367,7 +1392,7 @@ function toggleSearchHistory() {
     
     updateSearchDropdownMode();
     
-    showNotification(searchHistoryEnabled ? '将记录搜索历史' : '不再记录搜索历史');
+    showNotification(searchHistoryEnabled ? 'search.historyEnabled' : 'search.historyDisabled');
 }
 
 // 显示搜索历史记录
@@ -1419,7 +1444,7 @@ function clearSearchHistory() {
     searchHistory = [];
     localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
     renderSearchHistory();
-    showNotification('搜索历史记录已清除');
+    showNotification('search.historyCleared');
 }
 
 // 渲染搜索历史记录
@@ -1429,7 +1454,7 @@ function renderSearchHistory() {
     if (searchHistory.length === 0) {
         const emptyElement = document.createElement('div');
         emptyElement.className = 'search-history-empty';
-        emptyElement.textContent = '暂无搜索历史';
+        setText(emptyElement, 'search.noHistory');
         searchHistoryList.appendChild(emptyElement);
         return;
     }
@@ -1455,6 +1480,7 @@ function renderSearchHistory() {
         
         const deleteButton = document.createElement('button');
         deleteButton.className = 'search-history-item-delete';
+        setAttributeText(deleteButton, 'aria-label', 'search.deleteHistory', { name: term });
         deleteButton.innerHTML = `
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"></line>

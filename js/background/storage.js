@@ -58,10 +58,10 @@ export function loadBackgroundSettings() {
     }
 }
 
-export function saveBackgroundSettings(settings) {
+export function saveBackgroundSettings(settings, storage = localStorage) {
     const merged = normalizeBackgroundSettings(settings);
     merged.version = BACKGROUND_SETTINGS_VERSION;
-    localStorage.setItem(BACKGROUND_SETTINGS_KEY, JSON.stringify(merged));
+    storage.setItem(BACKGROUND_SETTINGS_KEY, JSON.stringify(merged));
     return merged;
 }
 

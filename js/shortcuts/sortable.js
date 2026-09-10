@@ -67,7 +67,7 @@ export function createShortcutSorter({ container, isEnabled, onCommit, onStateCh
         }, current.item);
         current.index = index;
         refresh();
-        announce(`${current.name}，当前位置 ${index + 1} / ${current.originalItems.length}`);
+        announce('sort.position', { name: current.name, position: index + 1, count: current.originalItems.length });
     }
 
     function start(item, pointer) {
@@ -112,7 +112,7 @@ export function createShortcutSorter({ container, isEnabled, onCommit, onStateCh
         frameId = requestAnimationFrame(tick);
 
         onStateChange({ active: true, inside: true });
-        announce(`已拿起 ${session.name}，位置 ${session.index + 1} / ${originalItems.length}。松手放置，移到列表外松手取消。`);
+        announce('sort.pickedUp', { name: session.name, position: session.index + 1, count: originalItems.length });
         return true;
     }
 
@@ -204,8 +204,7 @@ export function createShortcutSorter({ container, isEnabled, onCommit, onStateCh
         if (current.pointerType === 'touch') {
             current.item.querySelector('.shortcut-link').focus({ preventScroll: true });
         }
-        announce(accepted ? (changed ? `已放置 ${current.name}，顺序已保存，可撤销。` : '位置未改变。')
-            : '已取消排序，恢复原顺序。');
+        announce(accepted ? (changed ? 'sort.placed' : 'sort.unchanged') : 'sort.cancelled', { name: current.name });
     }
 
     function onPointerDown(event) {

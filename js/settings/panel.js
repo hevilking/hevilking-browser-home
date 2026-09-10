@@ -1,11 +1,14 @@
-import { BACKGROUND_GRADIENT_PRESETS, DEFAULT_BACKGROUND_SETTINGS, CUSTOM_IMAGE_MAX_TOTAL_BYTES } from './config.js';
-import { normalizeBackgroundSettings, normalizeColor, isImageMode, sameBackgroundSettings } from './settings-model.js';
-import { getCustomImageBlob } from './custom-image-library.js';
+import { BACKGROUND_GRADIENT_PRESETS, DEFAULT_BACKGROUND_SETTINGS, CUSTOM_IMAGE_MAX_TOTAL_BYTES } from '../background/config.js';
+import { normalizeBackgroundSettings, normalizeColor, isImageMode, sameBackgroundSettings } from '../background/settings-model.js';
+import { getCustomImageBlob } from '../background/custom-image-library.js';
+import { DEFAULT_LANGUAGE, getLanguage, setLanguage, onLanguageChange, setText, setAttributeText, t } from '../i18n/index.js';
+import { saveSettingsPreferences } from './preferences.js';
 
 // 面板维护配置草稿；图库操作独立即时保存，不参与配置的取消回滚。
-export function createBackgroundSettingsPanel({ controller, panel, trigger, onStatus }) {
+export function createSettingsPanel({ controller, panel, trigger, onStatus }) {
     const find = id => panel.querySelector(`#${id}`);
     const form = find('bgSettingsForm');
+    const languageSelect = find('interfaceLanguage');
     const fields = find('bgSettingsFields');
     const controls = Array.from(form.querySelectorAll('[data-setting]'));
     const closeButton = find('bgSettingsClose');
@@ -23,6 +26,7 @@ export function createBackgroundSettingsPanel({ controller, panel, trigger, onSt
     const thumbnailUrls = new Map();
     let opened = false;
     let baseline = null;
+    let baselineLanguage = getLanguage();
     let draft = null;
     let busy = false;
     let libraryBusy = false;
@@ -33,22 +37,22 @@ export function createBackgroundSettingsPanel({ controller, panel, trigger, onSt
 
     const valueAt = path => path.startsWith('filters.') ? draft.filters[path.slice(8)] : draft[path];
     const isDirty = () => opened && (invalidControls.size > 0 || !sameBackgroundSettings(draft, baseline)
-        || controller.getPreviewStatus().changed);
+        || getLanguage() !== baselineLanguage || controller.getPreviewStatus().changed);
 
     function refreshState() {
         if (!opened) return;
         const state = controller.getPreviewStatus();
         const dirty = isDirty();
         badge.hidden = !dirty && !state.pending && !busy;
-        badge.textContent = busy ? '保存中' : state.pending ? '预览中' : '未保存';
+        setText(badge, busy ? 'settings.saving' : state.pending ? 'settings.previewing' : 'settings.unsaved');
         saveButton.disabled = busy || state.pending || Boolean(previewFrame) || !dirty || invalidControls.size > 0 || Boolean(state.error);
         resetButton.disabled = busy;
         fields.disabled = busy;
         uploadButton.disabled = libraryBusy || busy;
         gallery.querySelectorAll('button').forEach(button => { button.disabled = libraryBusy || busy; });
-        const error = saveError || state.error || (invalidControls.size ? '请输入范围内的有效数值或颜色。' : '');
+        const error = saveError || state.error || (invalidControls.size ? 'settings.invalid' : '');
         message.hidden = !error;
-        message.textContent = error;
+        if (error) setText(message, error);
     }
 
     function updateControl(control, value) {
@@ -105,7 +109,7 @@ export function createBackgroundSettingsPanel({ controller, panel, trigger, onSt
         let value = control.type === 'checkbox' ? control.checked : control.value;
         if (path === 'solidColor') {
             value = normalizeColor(value);
-            if (!value) control.setCustomValidity('请输入有效的十六进制颜色');
+            if (!value) control.setCustomValidity(t('validation.color'));
         } else if (control.type === 'number' || control.type === 'range') {
             value = control.valueAsNumber;
         }
@@ -134,6 +138,8 @@ export function createBackgroundSettingsPanel({ controller, panel, trigger, onSt
         busy = false;
         saveError = '';
         baseline = controller.getSettings();
+        baselineLanguage = getLanguage();
+        languageSelect.value = baselineLanguage;
         draft = controller.beginPreview();
         opened = true;
         panel.inert = false;
@@ -143,7 +149,7 @@ export function createBackgroundSettingsPanel({ controller, panel, trigger, onSt
         form.scrollTop = 0;
         renderForm();
         refreshGallery();
-        find('bgModeSelect').focus({ preventScroll: true });
+        languageSelect.focus({ preventScroll: true });
     }
 
     function close({ saved = false, restoreFocus = true } = {}) {
@@ -153,7 +159,10 @@ export function createBackgroundSettingsPanel({ controller, panel, trigger, onSt
         sessionVersion++;
         opened = false;
         busy = false;
-        if (!saved) controller.cancelPreview();
+        if (!saved) {
+            controller.cancelPreview();
+            setLanguage(baselineLanguage);
+        }
         panel.classList.remove('active');
         if (restoreFocus || panel.contains(document.activeElement)) trigger.focus({ preventScroll: true });
         panel.inert = true;
@@ -177,12 +186,12 @@ export function createBackgroundSettingsPanel({ controller, panel, trigger, onSt
         try {
             await controller.previewSettings(draft);
             if (!opened || version !== sessionVersion) return;
-            if (await controller.commitPreview()) {
+            if (await controller.commitPreview(settings => saveSettingsPreferences(settings, getLanguage()))) {
                 close({ saved: true });
-                onStatus('背景与外观设置已保存');
+                onStatus('settings.saved');
             }
         } catch {
-            if (opened && version === sessionVersion) saveError = '保存失败，请稍后重试；取消可恢复原设置。';
+            if (opened && version === sessionVersion) saveError = 'settings.saveFailed';
         } finally {
             if (version === sessionVersion) {
                 busy = false;
@@ -210,13 +219,13 @@ export function createBackgroundSettingsPanel({ controller, panel, trigger, onSt
                 }
             });
             find('bgLibraryCount').textContent = `${items.length} / 30`;
-            find('bgUploadHint').textContent = `${formatBytes(stats.totalBytes)} / 80 MB · 单张不超过 8 MB`;
+            setText(find('bgUploadHint'), 'gallery.capacity', { used: formatBytes(stats.totalBytes) });
             find('bgLibraryUsage').value = stats.totalBytes;
             gallery.replaceChildren();
             if (!items.length) {
                 const empty = document.createElement('p');
                 empty.className = 'bg-upload-empty';
-                empty.textContent = '还没有本地图片，添加喜欢的壁纸吧';
+                setText(empty, 'gallery.empty');
                 gallery.appendChild(empty);
             }
             await Promise.all(items.map(async item => {
@@ -225,18 +234,20 @@ export function createBackgroundSettingsPanel({ controller, panel, trigger, onSt
                 card.dataset.id = item.id;
                 const thumbnail = document.createElement('img');
                 thumbnail.alt = item.name;
+                if (!item.name) setAttributeText(thumbnail, 'alt', 'gallery.unnamed');
                 thumbnail.draggable = false;
                 thumbnail.loading = 'lazy';
                 thumbnail.decoding = 'async';
                 const name = document.createElement('span');
                 name.className = 'bg-image-name';
                 name.textContent = item.name;
+                if (!item.name) setText(name, 'gallery.unnamed');
                 name.title = `${item.name} · ${formatBytes(item.size)}`;
                 const remove = document.createElement('button');
                 remove.type = 'button';
                 remove.className = 'bg-image-delete';
                 remove.dataset.id = item.id;
-                remove.setAttribute('aria-label', `删除 ${item.name}`);
+                setAttributeText(remove, 'aria-label', 'common.deleteNamed', () => ({ name: item.name || t('gallery.unnamed') }));
                 remove.textContent = '×';
                 remove.disabled = libraryBusy || busy;
                 card.append(thumbnail, name, remove);
@@ -256,7 +267,7 @@ export function createBackgroundSettingsPanel({ controller, panel, trigger, onSt
                 }
             }));
         } catch {
-            if (opened && version === galleryVersion) find('bgUploadHint').textContent = '读取图片库失败，请重新打开设置';
+            if (opened && version === galleryVersion) setText(find('bgUploadHint'), 'gallery.loadFailed');
         }
     }
 
@@ -269,9 +280,9 @@ export function createBackgroundSettingsPanel({ controller, panel, trigger, onSt
         try {
             await controller.addCustomImage(file);
             if (opened) await refreshGallery();
-            onStatus('图片已保存到本地图库');
+            onStatus('gallery.uploaded');
         } catch (error) {
-            onStatus(error.message || '图片上传失败');
+            onStatus(error.key || 'gallery.uploadFailed', error.values);
         } finally {
             uploadInput.value = '';
             libraryBusy = false;
@@ -286,9 +297,9 @@ export function createBackgroundSettingsPanel({ controller, panel, trigger, onSt
         try {
             await controller.removeCustomImage(button.dataset.id);
             if (opened) await refreshGallery();
-            onStatus('已从本地图库删除图片');
+            onStatus('gallery.deleted');
         } catch (error) {
-            onStatus(error.message || '删除图片失败');
+            onStatus(error.key || 'gallery.deleteFailed', error.values);
         } finally {
             libraryBusy = false;
             refreshState();
@@ -300,7 +311,7 @@ export function createBackgroundSettingsPanel({ controller, panel, trigger, onSt
         button.type = 'button';
         button.className = 'bg-gradient-preset';
         button.style.background = preset.value;
-        button.textContent = preset.name;
+        setText(button, preset.labelKey);
         button.setAttribute('aria-pressed', 'false');
         button.addEventListener('click', () => {
             draft.gradientPreset = preset.value;
@@ -320,6 +331,18 @@ export function createBackgroundSettingsPanel({ controller, panel, trigger, onSt
         renderForm();
         queuePreview();
     });
+    languageSelect.addEventListener('change', () => {
+        if (!opened || busy) return;
+        saveError = '';
+        setLanguage(languageSelect.value);
+    });
+    onLanguageChange(language => {
+        languageSelect.value = language;
+        invalidControls.forEach(control => {
+            if (control.validity.customError) control.setCustomValidity(t('validation.color'));
+        });
+        refreshState();
+    });
     trigger.addEventListener('click', () => opened ? close() : open());
     closeButton.addEventListener('click', () => close());
     cancelButton.addEventListener('click', () => close());
@@ -328,6 +351,7 @@ export function createBackgroundSettingsPanel({ controller, panel, trigger, onSt
     resetButton.addEventListener('click', () => {
         draft = normalizeBackgroundSettings(DEFAULT_BACKGROUND_SETTINGS);
         saveError = '';
+        setLanguage(DEFAULT_LANGUAGE);
         renderForm();
         queuePreview();
     });
@@ -337,5 +361,6 @@ export function createBackgroundSettingsPanel({ controller, panel, trigger, onSt
         }
     }, true);
     find('bgLibraryUsage').max = CUSTOM_IMAGE_MAX_TOTAL_BYTES;
+    setText(find('bgUploadHint'), 'gallery.capacity', { used: '0 B' });
     return { open, close, isOpen: () => opened, isDirty, refreshState };
 }

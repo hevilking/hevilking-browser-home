@@ -3,6 +3,7 @@ import {
     CUSTOM_IMAGE_MAX_FILE_SIZE_BYTES,
     CUSTOM_IMAGE_MAX_TOTAL_BYTES
 } from './config.js';
+import { LocalizedError } from '../i18n/messages.js';
 
 const DB_NAME = 'hevilking-background-db';
 const DB_VERSION = 1;
@@ -12,7 +13,7 @@ function openDatabase() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-        request.onerror = () => reject(request.error || new Error('打开图片数据库失败'));
+        request.onerror = () => reject(request.error || new LocalizedError('gallery.databaseFailed'));
         request.onupgradeneeded = () => {
             const db = request.result;
             if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -34,7 +35,7 @@ function withStore(mode, executor) {
             if (settled) return;
             settled = true;
             db.close();
-            reject(error || tx.error || new Error('数据库事务失败'));
+            reject(error || tx.error || new LocalizedError('gallery.transactionFailed'));
         };
         tx.oncomplete = () => {
             db.close();
@@ -44,7 +45,7 @@ function withStore(mode, executor) {
             }
         };
         tx.onerror = () => fail(tx.error);
-        tx.onabort = () => fail(tx.error || new Error('数据库事务已中止'));
+        tx.onabort = () => fail(tx.error || new LocalizedError('gallery.transactionAborted'));
         try {
             // 请求成功不等于事务落盘，统一等待 oncomplete 后反馈成功。
             executor(store, value => { result = value; }, fail);
@@ -59,7 +60,7 @@ function readAllRawRecords() {
     return withStore('readonly', (store, resolve, reject) => {
         const request = store.getAll();
         request.onsuccess = () => resolve(request.result || []);
-        request.onerror = () => reject(request.error || new Error('读取图片列表失败'));
+        request.onerror = () => reject(request.error || new LocalizedError('gallery.loadFailed'));
     });
 }
 
@@ -69,7 +70,7 @@ function generateId() {
 
 function normalizeName(fileName) {
     if (!fileName) {
-        return '未命名背景';
+        return '';
     }
     if (fileName.length <= 60) {
         return fileName;
@@ -104,7 +105,7 @@ async function compressImageIfNeeded(file) {
     const blob = await new Promise((resolve, reject) => {
         canvas.toBlob((result) => {
             if (!result) {
-                reject(new Error('压缩图片失败'));
+                reject(new LocalizedError('gallery.compressFailed'));
                 return;
             }
             resolve(result);
@@ -116,13 +117,13 @@ async function compressImageIfNeeded(file) {
 
 function validateFile(file) {
     if (!file) {
-        throw new Error('没有选择图片');
+        throw new LocalizedError('gallery.noFile');
     }
     if (!file.type.startsWith('image/')) {
-        throw new Error('仅支持图片文件');
+        throw new LocalizedError('gallery.imageOnly');
     }
     if (file.size > CUSTOM_IMAGE_MAX_FILE_SIZE_BYTES) {
-        throw new Error('图片过大，单张最大 8MB');
+        throw new LocalizedError('gallery.tooLarge');
     }
 }
 
@@ -157,12 +158,12 @@ export async function getCustomImageBlob(recordId) {
         request.onsuccess = () => {
             const record = request.result;
             if (!record || !record.blob) {
-                reject(new Error('找不到对应图片'));
+                reject(new LocalizedError('gallery.missing'));
                 return;
             }
             resolve(record.blob);
         };
-        request.onerror = () => reject(request.error || new Error('读取图片失败'));
+        request.onerror = () => reject(request.error || new LocalizedError('gallery.readFailed'));
     });
 }
 
@@ -175,10 +176,10 @@ export async function saveCustomImage(file) {
     const existing = await readAllRawRecords();
     const stats = calculateStats(existing);
     if (stats.count >= CUSTOM_IMAGE_MAX_COUNT) {
-        throw new Error(`最多可保存 ${CUSTOM_IMAGE_MAX_COUNT} 张本地图片`);
+        throw new LocalizedError('gallery.countLimit', { count: CUSTOM_IMAGE_MAX_COUNT });
     }
     if (stats.totalBytes + optimizedFile.size > CUSTOM_IMAGE_MAX_TOTAL_BYTES) {
-        throw new Error('本地图片库空间已达上限（80MB）');
+        throw new LocalizedError('gallery.storageFull');
     }
 
     const now = Date.now();
@@ -194,7 +195,7 @@ export async function saveCustomImage(file) {
     await withStore('readwrite', (store, resolve, reject) => {
         const request = store.put(record);
         request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error || new Error('保存图片失败'));
+        request.onerror = () => reject(request.error || new LocalizedError('gallery.uploadFailed'));
     });
 
     return toPublicRecord(record);
@@ -204,7 +205,7 @@ export async function removeCustomImage(recordId) {
     await withStore('readwrite', (store, resolve, reject) => {
         const request = store.delete(recordId);
         request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error || new Error('删除图片失败'));
+        request.onerror = () => reject(request.error || new LocalizedError('gallery.deleteFailed'));
     });
 }
 
