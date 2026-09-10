@@ -714,3 +714,97 @@ test('窄屏触屏菜单完整可点，切换长名称不会挤动搜索框', as
     await page.touchscreen.tap(345, 500);
     assert.equal(await menu.isVisible(), false);
 });
+
+test('添加和编辑共用表单，提交后保留身份并恢复操作焦点', async t => {
+    const { page } = await openPage(t, fixture(2));
+    const modal = page.locator('#addShortcutModal');
+    await page.locator('#addShortcutBtn').click();
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'shortcutName');
+    assert.equal(await page.locator('#submitBtn').textContent(), '添加');
+    assert.equal(await page.locator('#shortcutName').inputValue(), '');
+    await captureScreenshot(page, 'shortcut-dialog-add.png');
+    await page.locator('#shortcutName').fill('示例网站');
+    await page.locator('#shortcutUrl').fill('https://new-shortcut.example/path');
+    await page.locator('#submitBtn').click();
+    await modal.waitFor({ state: 'hidden' });
+    const added = (await saved(page)).at(-1);
+    assert.equal(added.name, '示例网站');
+    assert.ok(added.id);
+    assert.equal(await writes(page), 1);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'addShortcutBtn');
+
+    await cards(page).last().hover();
+    await cards(page).last().locator('.shortcut-edit').click();
+    assert.equal(await page.locator('#modalTitle').textContent(), '编辑快捷方式');
+    assert.equal(await page.locator('#submitBtn').textContent(), '保存');
+    assert.equal(await page.locator('#shortcutUrl').inputValue(), added.url);
+    await captureScreenshot(page, 'shortcut-dialog-edit.png');
+    await page.locator('#shortcutName').fill('示例网站 已编辑');
+    await page.locator('#submitBtn').click();
+    await modal.waitFor({ state: 'hidden' });
+    const edited = (await saved(page)).at(-1);
+    assert.equal(edited.id, added.id);
+    assert.equal(edited.name, '示例网站 已编辑');
+    assert.equal(await writes(page), 2);
+    assert.equal(await page.evaluate(() => document.activeElement.closest('.shortcut')?.dataset.shortcutId), added.id);
+});
+
+test('取消、关闭和点击遮罩不保存草稿，编辑取消后不会残留编辑状态', async t => {
+    const { page } = await openPage(t, fixture(2));
+    const initial = await saved(page);
+    const modal = page.locator('#addShortcutModal');
+    for (const dismiss of ['cancelShortcutBtn', 'closeModal', 'backdrop']) {
+        await page.locator('#addShortcutBtn').click();
+        assert.equal(await page.locator('#shortcutName').inputValue(), '');
+        assert.equal(await page.locator('#shortcutUrl').inputValue(), '');
+        await page.locator('#shortcutName').fill('不保存的草稿');
+        await page.locator('#shortcutUrl').fill('https://draft.example/');
+        if (dismiss === 'backdrop') await modal.locator('.modal-backdrop').click({ position: { x: 8, y: 8 } });
+        else await page.locator(`#${dismiss}`).click();
+        await modal.waitFor({ state: 'hidden' });
+        assert.deepEqual(await saved(page), initial);
+        assert.equal(await writes(page), 0);
+    }
+    await cards(page).first().hover();
+    await cards(page).first().locator('.shortcut-edit').click();
+    await page.locator('#shortcutName').fill('不保存的编辑');
+    await page.locator('#cancelShortcutBtn').click();
+    await modal.waitFor({ state: 'hidden' });
+    assert.deepEqual(await saved(page), initial);
+    await page.locator('#addShortcutBtn').click();
+    assert.equal(await page.locator('#modalTitle').textContent(), '添加快捷方式');
+    assert.equal(await page.locator('#submitBtn').textContent(), '添加');
+    await page.locator('#shortcutName').fill('独立新增');
+    await page.locator('#shortcutUrl').fill('https://separate.example/');
+    await page.locator('#submitBtn').click();
+    await modal.waitFor({ state: 'hidden' });
+    assert.deepEqual((await saved(page)).slice(0, 2), initial);
+    assert.equal((await saved(page)).length, 3);
+});
+
+test('窄屏和低高度表单仍能填写提交，必填及重复网址校验有效', async t => {
+    const { page } = await openPage(t, fixture(2), {
+        viewport: { width: 360, height: 640 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce'
+    });
+    const modal = page.locator('#addShortcutModal');
+    await page.locator('#addShortcutBtn').tap();
+    const bounds = await modal.locator('.modal-content').boundingBox();
+    assert.ok(bounds.x >= 15 && bounds.x + bounds.width <= 345);
+    await captureScreenshot(page, 'shortcut-dialog-mobile.png');
+    await page.locator('#shortcutName').fill('窄屏新增');
+    await page.locator('#submitBtn').tap();
+    assert.equal(await page.locator('#shortcutUrl').evaluate(input => input.validity.valueMissing), true);
+    assert.equal(await writes(page), 0);
+    await page.locator('#shortcutUrl').fill('https://shortcut-1.example/');
+    await page.locator('#submitBtn').tap();
+    assert.equal(await writes(page), 0);
+    assert.equal(await modal.getAttribute('aria-hidden'), 'false');
+    await page.locator('#shortcutUrl').fill('https://mobile-shortcut.example/');
+    await page.setViewportSize({ width: 360, height: 280 });
+    const compactBounds = await modal.locator('.modal-content').boundingBox();
+    assert.ok(compactBounds.y >= 15 && compactBounds.y + compactBounds.height <= 265);
+    await page.locator('#submitBtn').tap();
+    await modal.waitFor({ state: 'hidden' });
+    assert.equal((await saved(page)).at(-1).name, '窄屏新增');
+    assert.equal(await writes(page), 1);
+});

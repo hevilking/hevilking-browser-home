@@ -53,6 +53,7 @@ const shortcutSortUndo = document.getElementById('shortcutSortUndo');
 const undoShortcutSortBtn = document.getElementById('undoShortcutSortBtn');
 const addShortcutModal = document.getElementById('addShortcutModal');
 const closeModal = document.getElementById('closeModal');
+const cancelShortcutBtn = document.getElementById('cancelShortcutBtn');
 const shortcutForm = document.getElementById('shortcutForm');
 const shortcutName = document.getElementById('shortcutName');
 const shortcutUrl = document.getElementById('shortcutUrl');
@@ -302,7 +303,7 @@ function setupEventListeners() {
     });
     
     addShortcutBtn.addEventListener('click', () => {
-        addShortcutModal.classList.add('active');
+        openShortcutModal();
     });
     shortcutSortHelpController = createShortcutSortHelp({
         trigger: dragHintBtn,
@@ -344,23 +345,22 @@ function setupEventListeners() {
         }
     });
     
-    closeModal.addEventListener('click', () => {
-        addShortcutModal.classList.remove('active');
-        shortcutForm.reset();
-        editingShortcutId = null;
-        modalTitle.textContent = '添加快捷方式';
-        submitBtn.textContent = '添加快捷方式';
+    closeModal.addEventListener('click', closeShortcutModal);
+    cancelShortcutBtn.addEventListener('click', closeShortcutModal);
+    addShortcutModal.querySelector('.modal-backdrop').addEventListener('click', closeShortcutModal);
+    addShortcutModal.addEventListener('keydown', event => {
+        if (event.key !== 'Tab') return;
+        // 模态表单内循环焦点，避免移到遮罩后面的控件。
+        if (event.shiftKey && document.activeElement === closeModal) {
+            event.preventDefault();
+            submitBtn.focus();
+        } else if (!event.shiftKey && document.activeElement === submitBtn) {
+            event.preventDefault();
+            closeModal.focus();
+        }
     });
     
     window.addEventListener('click', (e) => {
-        if (e.target === addShortcutModal) {
-            addShortcutModal.classList.remove('active');
-            shortcutForm.reset();
-            editingShortcutId = null;
-            modalTitle.textContent = '添加快捷方式';
-            submitBtn.textContent = '添加快捷方式';
-        }
-
         if (!bgSettingsPanel.contains(e.target) && !wallpaperSettingsBtn.contains(e.target)) {
             closeBackgroundSettingsPanel();
         }
@@ -1346,6 +1346,41 @@ async function loadFavicon(iconElement, domain, name) {
     setCachedFavicon(domain, null, FAVICON_CACHE_FAILURE_TTL);
 }
 
+// 添加和编辑共用一套开关流程，避免残留表单内容或编辑状态。
+function openShortcutModal(shortcut = null) {
+    shortcutSorter?.cancel();
+    searchEnginePicker?.close();
+    shortcutSortHelpController?.close();
+    cancelSearchSuggestionRequest();
+    hideAllSearchDropdowns();
+    shortcutForm.reset();
+    editingShortcutId = shortcut?.id || null;
+    modalTitle.textContent = shortcut ? '编辑快捷方式' : '添加快捷方式';
+    submitBtn.textContent = shortcut ? '保存' : '添加';
+    if (shortcut) {
+        shortcutName.value = shortcut.name;
+        shortcutUrl.value = shortcut.url;
+    }
+    addShortcutModal.inert = false;
+    addShortcutModal.setAttribute('aria-hidden', 'false');
+    addShortcutModal.classList.add('active');
+    addShortcutModal.querySelector('.modal-content').scrollTop = 0;
+    shortcutName.focus({ preventScroll: true });
+}
+
+function closeShortcutModal() {
+    const editedItem = Array.from(shortcuts.children).find(item => item.dataset.shortcutId === editingShortcutId);
+    const returnTarget = editedItem?.querySelector('.shortcut-link') || addShortcutBtn;
+    addShortcutModal.classList.remove('active');
+    returnTarget.focus({ preventScroll: true });
+    addShortcutModal.inert = true;
+    addShortcutModal.setAttribute('aria-hidden', 'true');
+    shortcutForm.reset();
+    editingShortcutId = null;
+    modalTitle.textContent = '添加快捷方式';
+    submitBtn.textContent = '添加';
+}
+
 // 添加快捷方式
 function addShortcut() {
     const name = shortcutName.value.trim();
@@ -1367,26 +1402,14 @@ function addShortcut() {
 
         if (!saveAndRenderShortcuts(shortcutsList)) return;
 
-        addShortcutModal.classList.remove('active');
-        shortcutForm.reset();
+        closeShortcutModal();
     }
 }
 
 // 编辑快捷方式
 function editShortcut(id) {
     const shortcut = getSavedShortcuts().find(item => item.id === id);
-    
-    if (shortcut) {
-        editingShortcutId = id;
-        
-        modalTitle.textContent = '编辑快捷方式';
-        submitBtn.textContent = '保存修改';
-        
-        shortcutName.value = shortcut.name;
-        shortcutUrl.value = shortcut.url;
-        
-        addShortcutModal.classList.add('active');
-    }
+    if (shortcut) openShortcutModal(shortcut);
 }
 
 // 保存编辑的快捷方式
@@ -1415,13 +1438,7 @@ function saveEditedShortcut() {
 
         if (!saveAndRenderShortcuts(shortcutsList)) return;
 
-        editingShortcutId = null;
-
-        addShortcutModal.classList.remove('active');
-        shortcutForm.reset();
-
-        modalTitle.textContent = '添加快捷方式';
-        submitBtn.textContent = '添加快捷方式';
+        closeShortcutModal();
     }
 }
 
