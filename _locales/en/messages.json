@@ -1,0 +1,11 @@
+{
+  "extensionName": {
+    "message": "hevilking's Browser Home"
+  },
+  "extensionShortName": {
+    "message": "Browser Home"
+  },
+  "extensionDescription": {
+    "message": "A minimal browser homepage extension with multiple search engines, shortcuts, and customizable wallpapers."
+  }
+}

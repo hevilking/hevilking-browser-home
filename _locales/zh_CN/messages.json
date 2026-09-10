@@ -1,0 +1,11 @@
+{
+  "extensionName": {
+    "message": "hevilking的浏览器主页"
+  },
+  "extensionShortName": {
+    "message": "hevilking主页"
+  },
+  "extensionDescription": {
+    "message": "一个极简的浏览器主页扩展，支持搜索引擎切换、快捷方式和壁纸切换"
+  }
+}
