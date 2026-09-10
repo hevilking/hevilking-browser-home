@@ -28,12 +28,30 @@ function withStore(mode, executor) {
     return openDatabase().then((db) => new Promise((resolve, reject) => {
         const tx = db.transaction(STORE_NAME, mode);
         const store = tx.objectStore(STORE_NAME);
-        executor(store, resolve, reject);
-        tx.oncomplete = () => db.close();
-        tx.onerror = () => {
+        let result;
+        let settled = false;
+        const fail = error => {
+            if (settled) return;
+            settled = true;
             db.close();
-            reject(tx.error || new Error('数据库事务失败'));
+            reject(error || tx.error || new Error('数据库事务失败'));
         };
+        tx.oncomplete = () => {
+            db.close();
+            if (!settled) {
+                settled = true;
+                resolve(result);
+            }
+        };
+        tx.onerror = () => fail(tx.error);
+        tx.onabort = () => fail(tx.error || new Error('数据库事务已中止'));
+        try {
+            // 请求成功不等于事务落盘，统一等待 oncomplete 后反馈成功。
+            executor(store, value => { result = value; }, fail);
+        } catch (error) {
+            tx.abort();
+            fail(error);
+        }
     }));
 }
 

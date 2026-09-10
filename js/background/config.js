@@ -12,7 +12,6 @@ export const BACKGROUND_MODES = {
 };
 
 export const DEFAULT_TRANSITION_WALLPAPERS = [
-    'assets/images/default.webp',
     'assets/images/undifine.webp'
 ];
 
@@ -46,7 +45,14 @@ export const DEFAULT_RUNTIME_CACHE = {
     recentHistory: []
 };
 
-export const BACKGROUND_TRANSITION_MS = 800;
+export const BACKGROUND_GRADIENT_PRESETS = [
+    { name: '深海', value: 'linear-gradient(135deg, #2b5876, #4e4376)' },
+    { name: '暮色', value: 'linear-gradient(135deg, #232526, #414345)' },
+    { name: '松林', value: 'linear-gradient(135deg, #134e5e, #2b6d5c)' },
+    { name: '暖沙', value: 'linear-gradient(135deg, #665147, #b39b78)' },
+    { name: '晚霞', value: 'linear-gradient(135deg, #653b53, #c97964)' },
+    { name: '夜空', value: 'linear-gradient(135deg, #141e30, #243b55)' }
+];
 export const PRELOAD_TIMEOUT_MS = 7000;
 export const CUSTOM_IMAGE_MAX_COUNT = 30;
 export const CUSTOM_IMAGE_MAX_FILE_SIZE_BYTES = 8 * 1024 * 1024;

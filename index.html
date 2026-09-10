@@ -26,7 +26,7 @@
                     <polyline points="21 15 16 10 5 21"></polyline>
                 </svg>
             </div>
-            <button class="wallpaper-settings-btn" id="wallpaperSettingsBtn" type="button" title="背景设置">
+            <button class="wallpaper-settings-btn" id="wallpaperSettingsBtn" type="button" title="背景与外观" aria-label="背景与外观设置" aria-controls="bgSettingsPanel" aria-expanded="false">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="3"></circle>
                     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.33 1V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-.33-1 1.65 1.65 0 0 0-1-.6 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1-.33H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1-.33 1.65 1.65 0 0 0 .6-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6 1.65 1.65 0 0 0 .33-1V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 .33 1 1.65 1.65 0 0 0 1 .6 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.24.3.44.64.6 1 .12.33.18.68.18 1.03s-.06.7-.18 1.03c-.16.36-.36.7-.6 1z"></path>
@@ -204,35 +204,36 @@
             <div class="visually-hidden" id="shortcutSortStatus" role="status" aria-live="polite" aria-atomic="true"></div>
         </div>
         
-        <!-- 添加快捷方式模态框 -->
-        <div class="modal" id="addShortcutModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-hidden="true" inert>
-            <div class="modal-backdrop"></div>
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2 id="modalTitle">添加快捷方式</h2>
-                    <button class="close-btn" id="closeModal" type="button" aria-label="关闭弹窗">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                    </button>
-                </div>
-                <div class="modal-body">
-                    <form id="shortcutForm">
-                        <div class="form-group">
-                            <label for="shortcutName">名称</label>
-                            <input type="text" id="shortcutName" placeholder="输入网站名称" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="shortcutUrl">网址</label>
-                            <input type="url" id="shortcutUrl" placeholder="https://example.com" required>
-                        </div>
-                        <div class="modal-actions">
-                            <button type="button" class="cancel-btn" id="cancelShortcutBtn">取消</button>
-                            <button type="submit" class="submit-btn" id="submitBtn">添加</button>
-                        </div>
-                    </form>
-                </div>
+    </div>
+
+    <!-- 添加快捷方式模态框 -->
+    <div class="modal" id="addShortcutModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-hidden="true" inert>
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">添加快捷方式</h2>
+                <button class="close-btn" id="closeModal" type="button" aria-label="关闭弹窗">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="shortcutForm">
+                    <div class="form-group">
+                        <label for="shortcutName">名称</label>
+                        <input type="text" id="shortcutName" placeholder="输入网站名称" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="shortcutUrl">网址</label>
+                        <input type="url" id="shortcutUrl" placeholder="https://example.com" required>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="cancel-btn" id="cancelShortcutBtn">取消</button>
+                        <button type="submit" class="submit-btn" id="submitBtn">添加</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -243,81 +244,158 @@
         <button class="shortcut-sort-action" id="undoShortcutSortBtn" type="button">撤销</button>
     </div>
 
-    <!-- 背景设置面板 -->
-    <aside class="bg-settings-panel" id="bgSettingsPanel" aria-hidden="true">
+    <!-- 背景与外观设置：预览草稿，保存后生效。 -->
+    <aside class="bg-settings-panel" id="bgSettingsPanel" aria-labelledby="bgSettingsTitle" aria-hidden="true" inert>
         <div class="bg-settings-header">
-            <h3>背景设置</h3>
-            <button class="bg-settings-close" id="bgSettingsClose" type="button" aria-label="关闭背景设置">×</button>
+            <div class="bg-settings-title">
+                <h3 id="bgSettingsTitle">背景与外观</h3>
+                <span class="bg-settings-state" id="bgSettingsState" hidden>未保存</span>
+            </div>
+            <button class="bg-settings-close" id="bgSettingsClose" type="button" aria-label="关闭背景设置">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg>
+            </button>
         </div>
-        <div class="bg-settings-body">
-            <div class="bg-settings-item">
-                <label for="bgModeSelect">背景模式</label>
-                <select id="bgModeSelect">
-                    <option value="mixed">混合（本地+在线）</option>
-                    <option value="local">仅本地</option>
-                    <option value="online">仅在线</option>
-                    <option value="gradient">渐变</option>
-                    <option value="solid">纯色</option>
-                </select>
-            </div>
-            <div class="bg-settings-item">
-                <label for="bgAutoRotate">自动轮播</label>
-                <div class="bg-auto-rotate-toggle">
-                    <input type="checkbox" id="bgAutoRotate" class="search-history-switch">
-                    <label for="bgAutoRotate" class="toggle-label">
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-            </div>
-            <div class="bg-settings-item">
-                <label for="bgRotateInterval">轮播间隔（秒）<span id="bgRotateIntervalValue"></span></label>
-                <input type="range" id="bgRotateInterval" min="10" max="1800" step="10">
-            </div>
-            <div class="bg-settings-item">
-                <label for="bgOverlayOpacity">遮罩强度（%）<span id="bgOverlayOpacityValue"></span></label>
-                <input type="range" id="bgOverlayOpacity" min="0" max="70" step="1">
-            </div>
-            <div class="bg-settings-item">
-                <label for="bgUiGlassBlur">界面毛玻璃强度（px）<span id="bgUiGlassBlurValue"></span></label>
-                <input type="range" id="bgUiGlassBlur" min="0" max="30" step="1">
-            </div>
-            <div class="bg-settings-item">
-                <label for="bgBlur">模糊（px）<span id="bgBlurValue"></span></label>
-                <input type="range" id="bgBlur" min="0" max="20" step="1">
-            </div>
-            <div class="bg-settings-item">
-                <label for="bgBrightness">亮度（%）<span id="bgBrightnessValue"></span></label>
-                <input type="range" id="bgBrightness" min="60" max="140" step="1">
-            </div>
-            <div class="bg-settings-item">
-                <label for="bgSaturate">饱和度（%）<span id="bgSaturateValue"></span></label>
-                <input type="range" id="bgSaturate" min="50" max="180" step="1">
-            </div>
-            <div class="bg-settings-item">
-                <label for="bgContrast">对比度（%）<span id="bgContrastValue"></span></label>
-                <input type="range" id="bgContrast" min="50" max="150" step="1">
-            </div>
-            <div class="bg-settings-item" id="bgSolidColorRow">
-                <label for="bgSolidColor">纯色值</label>
-                <input type="color" id="bgSolidColor">
-            </div>
-            <div class="bg-settings-item">
-                <label for="bgUploadInput">上传本地背景（仅本地保存）</label>
-                <input type="file" id="bgUploadInput" accept="image/*">
-                <small id="bgUploadHint">单图上限 8MB，总上限 80MB，最多 30 张。</small>
-            </div>
-            <div class="bg-settings-item">
-                <label>已上传背景</label>
-                <div class="bg-uploaded-list" id="bgUploadedList"></div>
-            </div>
+        <form class="bg-settings-body" id="bgSettingsForm">
+            <fieldset id="bgSettingsFields">
+                <section class="bg-settings-section">
+                    <h4>背景来源</h4>
+                    <div class="bg-setting-control">
+                        <label for="bgModeSelect">背景模式</label>
+                        <select id="bgModeSelect" data-setting="mode">
+                            <option value="mixed">本地与在线</option>
+                            <option value="local">本地图片</option>
+                            <option value="online">在线壁纸</option>
+                            <option value="gradient">渐变</option>
+                            <option value="solid">纯色</option>
+                        </select>
+                    </div>
+                    <div class="bg-setting-control" id="bgSolidColorRow" hidden>
+                        <label for="bgSolidColorHex">背景颜色</label>
+                        <div class="bg-color-control">
+                            <input type="color" id="bgSolidColor" data-setting="solidColor" aria-label="选择背景颜色">
+                            <input type="text" id="bgSolidColorHex" data-setting="solidColor" placeholder="#1f2937" maxlength="7" spellcheck="false" autocomplete="off" required>
+                        </div>
+                    </div>
+                    <div class="bg-setting-control" id="bgGradientRow" hidden>
+                        <span class="bg-setting-caption">渐变预设</span>
+                        <div class="bg-gradient-presets" id="bgGradientPresets"></div>
+                    </div>
+                </section>
+                <section class="bg-settings-section" id="bgRotationSection">
+                    <h4>自动轮播</h4>
+                    <div class="bg-toggle-row">
+                        <label for="bgAutoRotate">自动切换背景</label>
+                        <label class="bg-switch">
+                            <input class="visually-hidden" type="checkbox" id="bgAutoRotate" data-setting="autoRotate" role="switch" aria-label="自动切换背景">
+                            <span class="bg-switch-track" aria-hidden="true"></span>
+                        </label>
+                    </div>
+                    <div class="bg-setting-control" id="bgRotateIntervalRow" hidden>
+                        <label for="bgRotatePreset">切换间隔</label>
+                        <select id="bgRotatePreset">
+                            <option value="30">30 秒</option>
+                            <option value="60">1 分钟</option>
+                            <option value="180">3 分钟</option>
+                            <option value="300">5 分钟</option>
+                            <option value="600">10 分钟</option>
+                            <option value="custom">自定义</option>
+                        </select>
+                        <div class="bg-interval-custom" id="bgRotateCustomRow" hidden>
+                            <input type="number" id="bgRotateInterval" data-setting="rotateIntervalSec" min="10" max="1800" step="10" required aria-label="自定义轮播间隔">
+                            <span>秒</span>
+                        </div>
+                    </div>
+                </section>
+                <section class="bg-settings-section">
+                    <h4>外观效果</h4>
+                        <div class="bg-setting-control">
+                            <div class="bg-setting-label">
+                                <label for="bgOverlayOpacity">背景压暗</label>
+                                <div class="bg-number-control">
+                                    <input type="number" id="bgOverlayOpacityValue" data-setting="overlayOpacity" min="0" max="70" step="1" required aria-label="背景压暗数值">
+                                    <span>%</span>
+                                </div>
+                            </div>
+                            <input type="range" id="bgOverlayOpacity" data-setting="overlayOpacity" min="0" max="70" step="1">
+                        </div>
+                        <div class="bg-setting-control" id="bgImageBlurRow">
+                            <div class="bg-setting-label">
+                                <label for="bgBlur">背景模糊</label>
+                                <div class="bg-number-control">
+                                    <input type="number" id="bgBlurValue" data-setting="filters.blur" min="0" max="20" step="1" required aria-label="背景模糊数值">
+                                    <span>px</span>
+                                </div>
+                            </div>
+                            <input type="range" id="bgBlur" data-setting="filters.blur" min="0" max="20" step="1">
+                        </div>
+                        <div class="bg-setting-control">
+                            <div class="bg-setting-label">
+                                <label for="bgUiGlassBlur">卡片毛玻璃</label>
+                                <div class="bg-number-control">
+                                    <input type="number" id="bgUiGlassBlurValue" data-setting="uiGlassBlur" min="0" max="30" step="1" required aria-label="卡片毛玻璃数值">
+                                    <span>px</span>
+                                </div>
+                            </div>
+                            <input type="range" id="bgUiGlassBlur" data-setting="uiGlassBlur" min="0" max="30" step="1">
+                        </div>
+                    <details class="bg-advanced-settings" id="bgAdvancedSettings">
+                        <summary>高级调节</summary>
+                        <div class="bg-advanced-body">
+                        <div class="bg-setting-control">
+                            <div class="bg-setting-label">
+                                <label for="bgBrightness">亮度</label>
+                                <div class="bg-number-control">
+                                    <input type="number" id="bgBrightnessValue" data-setting="filters.brightness" min="60" max="140" step="1" required aria-label="亮度数值">
+                                    <span>%</span>
+                                </div>
+                            </div>
+                            <input type="range" id="bgBrightness" data-setting="filters.brightness" min="60" max="140" step="1">
+                        </div>
+                        <div class="bg-setting-control">
+                            <div class="bg-setting-label">
+                                <label for="bgSaturate">饱和度</label>
+                                <div class="bg-number-control">
+                                    <input type="number" id="bgSaturateValue" data-setting="filters.saturate" min="50" max="180" step="1" required aria-label="饱和度数值">
+                                    <span>%</span>
+                                </div>
+                            </div>
+                            <input type="range" id="bgSaturate" data-setting="filters.saturate" min="50" max="180" step="1">
+                        </div>
+                        <div class="bg-setting-control">
+                            <div class="bg-setting-label">
+                                <label for="bgContrast">对比度</label>
+                                <div class="bg-number-control">
+                                    <input type="number" id="bgContrastValue" data-setting="filters.contrast" min="50" max="150" step="1" required aria-label="对比度数值">
+                                    <span>%</span>
+                                </div>
+                            </div>
+                            <input type="range" id="bgContrast" data-setting="filters.contrast" min="50" max="150" step="1">
+                        </div>
+                        </div>
+                    </details>
+                </section>
+                <section class="bg-settings-section">
+                    <div class="bg-library-heading"><h4>本地图库</h4><span id="bgLibraryCount">0 / 30</span></div>
+                    <button class="bg-upload-btn" id="bgUploadBtn" type="button"><span aria-hidden="true">＋</span> 添加图片</button>
+                    <input type="file" id="bgUploadInput" accept="image/*" hidden>
+                    <div class="bg-library-capacity">
+                        <progress id="bgLibraryUsage" value="0"></progress>
+                        <small id="bgUploadHint">0 B / 80 MB · 单张不超过 8 MB</small>
+                    </div>
+                    <p class="bg-library-notice">图片仅保存在本机，图库增删立即保存。</p>
+                    <div class="bg-uploaded-list" id="bgUploadedList"></div>
+                </section>
+            </fieldset>
+            <div class="author-credit author-credit--panel"><a href="https://hevilking.com" target="_blank" rel="noopener noreferrer">Made by hevilking</a></div>
+        </form>
+        <div class="bg-settings-footer">
+            <p class="bg-settings-message" id="bgSettingsMessage" role="status" aria-live="polite" hidden></p>
             <div class="bg-settings-actions">
-                <button type="button" id="bgResetBtn" class="bg-reset-btn">恢复默认设置</button>
-                <button type="button" id="bgApplyBtn">应用设置</button>
-            </div>
-            <div class="author-credit author-credit--panel">
-                <a href="https://hevilking.com" target="_blank" rel="noopener noreferrer">
-                    Made by hevilking
-                </a>
+                <button type="button" id="bgResetBtn" class="bg-reset-btn">恢复默认</button>
+                <div>
+                    <button type="button" id="bgCancelBtn" class="bg-cancel-btn">取消</button>
+                    <button type="submit" id="bgApplyBtn" class="bg-save-btn" form="bgSettingsForm" disabled>保存</button>
+                </div>
             </div>
         </div>
     </aside>

@@ -1,4 +1,5 @@
 import { initBackgroundSystem } from './background/index.js';
+import { createBackgroundSettingsPanel } from './background/settings-panel.js';
 import { ensureShortcutIds, orderShortcuts } from './shortcuts/data.js';
 import { createShortcutSorter } from './shortcuts/sortable.js';
 import { createShortcutSortHelp } from './shortcuts/sort-help.js';
@@ -8,30 +9,6 @@ import { createSearchEnginePicker } from './search/engine-picker.js';
 const wallpaperSwitch = document.getElementById('wallpaperSwitch');
 const wallpaperSettingsBtn = document.getElementById('wallpaperSettingsBtn');
 const bgSettingsPanel = document.getElementById('bgSettingsPanel');
-const bgSettingsClose = document.getElementById('bgSettingsClose');
-const bgModeSelect = document.getElementById('bgModeSelect');
-const bgAutoRotate = document.getElementById('bgAutoRotate');
-const bgRotateInterval = document.getElementById('bgRotateInterval');
-const bgRotateIntervalValue = document.getElementById('bgRotateIntervalValue');
-const bgOverlayOpacity = document.getElementById('bgOverlayOpacity');
-const bgOverlayOpacityValue = document.getElementById('bgOverlayOpacityValue');
-const bgUiGlassBlur = document.getElementById('bgUiGlassBlur');
-const bgUiGlassBlurValue = document.getElementById('bgUiGlassBlurValue');
-const bgBlur = document.getElementById('bgBlur');
-const bgBlurValue = document.getElementById('bgBlurValue');
-const bgBrightness = document.getElementById('bgBrightness');
-const bgBrightnessValue = document.getElementById('bgBrightnessValue');
-const bgSaturate = document.getElementById('bgSaturate');
-const bgSaturateValue = document.getElementById('bgSaturateValue');
-const bgContrast = document.getElementById('bgContrast');
-const bgContrastValue = document.getElementById('bgContrastValue');
-const bgSolidColor = document.getElementById('bgSolidColor');
-const bgSolidColorRow = document.getElementById('bgSolidColorRow');
-const bgUploadInput = document.getElementById('bgUploadInput');
-const bgUploadHint = document.getElementById('bgUploadHint');
-const bgUploadedList = document.getElementById('bgUploadedList');
-const bgResetBtn = document.getElementById('bgResetBtn');
-const bgApplyBtn = document.getElementById('bgApplyBtn');
 const searchInput = document.getElementById('searchInput');
 const searchButton = document.getElementById('searchButton');
 const shortcuts = document.getElementById('shortcuts');
@@ -133,6 +110,7 @@ const SEARCH_ENGINE_STORAGE_KEY = 'defaultSearchEngine';
 // 编辑模式相关变量
 let editingShortcutId = null;
 let backgroundController = null;
+let backgroundSettingsPanel = null;
 
 // 默认快捷方式
 const defaultShortcuts = [
@@ -189,33 +167,9 @@ async function setRandomWallpaper() {
     }
 }
 
-// 设置默认壁纸
-function setDefaultWallpaper() {
-    if (!backgroundController) {
-        return;
-    }
-    backgroundController.updateSettings({ mode: 'local' }).catch((error) => {
-        console.error('恢复默认背景失败:', error);
-    });
-}
-
 // 设置事件监听器
 function setupEventListeners() {
     wallpaperSwitch.addEventListener('click', setRandomWallpaper);
-    wallpaperSettingsBtn.addEventListener('click', openBackgroundSettingsPanel);
-    bgSettingsClose.addEventListener('click', closeBackgroundSettingsPanel);
-    bgApplyBtn.addEventListener('click', applyBackgroundSettings);
-    bgResetBtn.addEventListener('click', resetBackgroundSettings);
-    bgUploadInput.addEventListener('change', handleBackgroundUpload);
-    bgUploadedList.addEventListener('click', handleUploadedListClick);
-    bgModeSelect.addEventListener('change', toggleSolidColorVisibility);
-    bgRotateInterval.addEventListener('input', () => updateRangeLabel(bgRotateIntervalValue, bgRotateInterval.value, 's'));
-    bgOverlayOpacity.addEventListener('input', () => updateRangeLabel(bgOverlayOpacityValue, bgOverlayOpacity.value, '%'));
-    bgUiGlassBlur.addEventListener('input', () => updateRangeLabel(bgUiGlassBlurValue, bgUiGlassBlur.value, 'px'));
-    bgBlur.addEventListener('input', () => updateRangeLabel(bgBlurValue, bgBlur.value, 'px'));
-    bgBrightness.addEventListener('input', () => updateRangeLabel(bgBrightnessValue, bgBrightness.value, '%'));
-    bgSaturate.addEventListener('input', () => updateRangeLabel(bgSaturateValue, bgSaturate.value, '%'));
-    bgContrast.addEventListener('input', () => updateRangeLabel(bgContrastValue, bgContrast.value, '%'));
     
     searchButton.addEventListener('click', performSearch);
     searchInput.addEventListener('input', handleSearchInputChange);
@@ -360,12 +314,6 @@ function setupEventListeners() {
         }
     });
     
-    window.addEventListener('click', (e) => {
-        if (!bgSettingsPanel.contains(e.target) && !wallpaperSettingsBtn.contains(e.target)) {
-            closeBackgroundSettingsPanel();
-        }
-    });
-    
     shortcutForm.addEventListener('submit', (e) => {
         e.preventDefault();
         if (editingShortcutId) {
@@ -378,217 +326,18 @@ function setupEventListeners() {
 
 function initBackgroundEngine() {
     backgroundController = initBackgroundSystem({
-        onStatus: (message) => showNotification(message)
+        onStatus: message => showNotification(message),
+        onPreviewChange: () => backgroundSettingsPanel?.refreshState()
     });
-
-    backgroundController.init().then(() => {
-        syncBackgroundSettingsPanel();
-    }).catch((error) => {
+    backgroundSettingsPanel = createBackgroundSettingsPanel({
+        controller: backgroundController,
+        panel: bgSettingsPanel,
+        trigger: wallpaperSettingsBtn,
+        onStatus: message => showNotification(message)
+    });
+    backgroundController.init().catch(error => {
         console.error('初始化背景系统失败:', error);
     });
-}
-
-function openBackgroundSettingsPanel() {
-    syncBackgroundSettingsPanel();
-    renderUploadedBackgroundList();
-    bgSettingsPanel.classList.add('active');
-    bgSettingsPanel.setAttribute('aria-hidden', 'false');
-}
-
-function closeBackgroundSettingsPanel() {
-    bgSettingsPanel.classList.remove('active');
-    bgSettingsPanel.setAttribute('aria-hidden', 'true');
-}
-
-function updateRangeLabel(valueElement, value, suffix = '') {
-    valueElement.textContent = `${value}${suffix}`;
-}
-
-function syncBackgroundSettingsPanel() {
-    if (!backgroundController) {
-        return;
-    }
-
-    const settings = backgroundController.getSettings();
-    bgModeSelect.value = settings.mode;
-    bgAutoRotate.checked = settings.autoRotate;
-    bgRotateInterval.value = settings.rotateIntervalSec;
-    bgOverlayOpacity.value = settings.overlayOpacity;
-    bgUiGlassBlur.value = settings.uiGlassBlur ?? 5;
-    bgBlur.value = settings.filters.blur;
-    bgBrightness.value = settings.filters.brightness;
-    bgSaturate.value = settings.filters.saturate;
-    bgContrast.value = settings.filters.contrast;
-    bgSolidColor.value = settings.solidColor || '#1f2937';
-
-    updateRangeLabel(bgRotateIntervalValue, bgRotateInterval.value, 's');
-    updateRangeLabel(bgOverlayOpacityValue, bgOverlayOpacity.value, '%');
-    updateRangeLabel(bgUiGlassBlurValue, bgUiGlassBlur.value, 'px');
-    updateRangeLabel(bgBlurValue, bgBlur.value, 'px');
-    updateRangeLabel(bgBrightnessValue, bgBrightness.value, '%');
-    updateRangeLabel(bgSaturateValue, bgSaturate.value, '%');
-    updateRangeLabel(bgContrastValue, bgContrast.value, '%');
-    toggleSolidColorVisibility();
-}
-
-function toggleSolidColorVisibility() {
-    if (bgModeSelect.value === 'solid') {
-        bgSolidColorRow.style.display = '';
-        return;
-    }
-    bgSolidColorRow.style.display = 'none';
-}
-
-async function applyBackgroundSettings() {
-    if (!backgroundController) {
-        return;
-    }
-
-    const patch = {
-        mode: bgModeSelect.value,
-        autoRotate: bgAutoRotate.checked,
-        rotateIntervalSec: Number(bgRotateInterval.value),
-        overlayOpacity: Number(bgOverlayOpacity.value),
-        uiGlassBlur: Number(bgUiGlassBlur.value),
-        solidColor: bgSolidColor.value,
-        filters: {
-            blur: Number(bgBlur.value),
-            brightness: Number(bgBrightness.value),
-            saturate: Number(bgSaturate.value),
-            contrast: Number(bgContrast.value)
-        }
-    };
-
-    try {
-        await backgroundController.updateSettings(patch);
-        if (patch.mode === 'solid' || patch.mode === 'gradient') {
-            await backgroundController.nextBackground({ silent: true });
-        }
-        showNotification('背景设置已应用');
-        closeBackgroundSettingsPanel();
-    } catch (error) {
-        console.error('应用背景设置失败:', error);
-        showNotification('背景设置应用失败');
-    }
-}
-
-async function resetBackgroundSettings() {
-    if (!backgroundController) {
-        return;
-    }
-
-    try {
-        await backgroundController.resetSettings();
-        syncBackgroundSettingsPanel();
-        showNotification('已恢复默认背景设置');
-    } catch (error) {
-        console.error('恢复默认背景设置失败:', error);
-        showNotification('恢复默认设置失败');
-    }
-}
-
-function formatBytes(bytes) {
-    if (bytes < 1024) {
-        return `${bytes}B`;
-    }
-    if (bytes < 1024 * 1024) {
-        return `${(bytes / 1024).toFixed(1)}KB`;
-    }
-    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
-}
-
-async function renderUploadedBackgroundList() {
-    if (!backgroundController) {
-        return;
-    }
-
-    try {
-        const [items, stats] = await Promise.all([
-            backgroundController.listCustomImages(),
-            backgroundController.getCustomImageStats()
-        ]);
-
-        bgUploadHint.textContent = `单图上限 8MB，总上限 80MB，最多 30 张。已用 ${items.length}/30（${formatBytes(stats.totalBytes)}）`;
-        bgUploadedList.innerHTML = '';
-
-        if (items.length === 0) {
-            const empty = document.createElement('div');
-            empty.className = 'bg-upload-empty';
-            empty.textContent = '暂无上传图片';
-            bgUploadedList.appendChild(empty);
-            return;
-        }
-
-        items.forEach((item) => {
-            const row = document.createElement('div');
-            row.className = 'bg-upload-item';
-            row.dataset.id = item.id;
-
-            const name = document.createElement('div');
-            name.className = 'bg-upload-item-name';
-            name.textContent = `${item.name} (${formatBytes(item.size)})`;
-
-            const delBtn = document.createElement('button');
-            delBtn.type = 'button';
-            delBtn.className = 'bg-upload-item-delete';
-            delBtn.dataset.action = 'delete';
-            delBtn.dataset.id = item.id;
-            delBtn.textContent = '删除';
-
-            row.appendChild(name);
-            row.appendChild(delBtn);
-            bgUploadedList.appendChild(row);
-        });
-    } catch (error) {
-        console.error('读取上传背景列表失败:', error);
-        bgUploadHint.textContent = '读取本地图片库失败';
-    }
-}
-
-async function handleBackgroundUpload(e) {
-    if (!backgroundController) {
-        return;
-    }
-
-    const file = e.target.files && e.target.files[0];
-    if (!file) {
-        return;
-    }
-
-    try {
-        await backgroundController.addCustomImage(file);
-        await renderUploadedBackgroundList();
-        if (bgModeSelect.value === 'local' || bgModeSelect.value === 'mixed') {
-            await backgroundController.nextBackground({ silent: true });
-        }
-        showNotification('背景图片已保存到本地');
-    } catch (error) {
-        console.error('上传背景图片失败:', error);
-        showNotification(error.message || '上传失败');
-    } finally {
-        bgUploadInput.value = '';
-    }
-}
-
-async function handleUploadedListClick(e) {
-    const button = e.target.closest('button[data-action="delete"]');
-    if (!button || !backgroundController) {
-        return;
-    }
-
-    const imageId = button.dataset.id;
-    if (!imageId) {
-        return;
-    }
-
-    try {
-        await backgroundController.removeCustomImage(imageId);
-        await renderUploadedBackgroundList();
-        showNotification('已删除本地背景');
-    } catch (error) {
-        console.error('删除本地背景失败:', error);
-        showNotification('删除失败');
-    }
 }
 
 // 显示通知

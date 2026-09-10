@@ -1562,181 +1562,587 @@ body {
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* 分组设置侧栏：标题与操作区固定，只有表单主体滚动。 */
 .bg-settings-panel {
     position: fixed;
-    top: 20px;
-    right: 20px;
-    width: 320px;
-    max-height: calc(100vh - 40px);
-    overflow-y: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    background: rgba(20, 24, 38, 0.78);
-    backdrop-filter: blur(16px);
-    color: #f7f8fb;
+    top: 16px;
+    right: 16px;
+    bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    width: 380px;
+    max-width: calc(100vw - 32px);
+    border: 1px solid var(--popover-border);
+    border-radius: var(--popover-radius);
+    background: var(--popover-bg);
+    box-shadow: var(--popover-shadow);
+    backdrop-filter: blur(var(--popover-blur));
+    color: rgba(255, 255, 255, 0.92);
+    color-scheme: dark;
     z-index: 300;
-    transform: translateX(120%);
+    transform: translateX(calc(100% + 32px));
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
-    transition: transform 0.25s ease, opacity 0.25s ease;
-}
-
-.bg-settings-panel::-webkit-scrollbar {
-    width: 0;
-    height: 0;
+    transition: transform 0.18s ease, opacity 0.18s ease, visibility 0s linear 0.18s;
 }
 
 .bg-settings-panel.active {
     transform: translateX(0);
     opacity: 1;
+    visibility: visible;
     pointer-events: auto;
+    transition-delay: 0s;
 }
 
 .bg-settings-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    flex-shrink: 0;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.09);
 }
 
-.bg-settings-header h3 {
+.bg-settings-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.bg-settings-title h3 {
     font-size: 16px;
     font-weight: 600;
+    line-height: 24px;
+}
+
+.bg-settings-state {
+    padding: 1px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 5px;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.64);
 }
 
 .bg-settings-close {
-    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 6px;
     background: transparent;
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 22px;
-    line-height: 1;
+    color: rgba(255, 255, 255, 0.7);
     cursor: pointer;
 }
 
+.bg-settings-close:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.08);
+}
+
 .bg-settings-body {
-    padding: 14px 16px 16px;
+    flex: 1;
+    min-height: 0;
+    padding: 20px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+#bgSettingsFields {
     display: flex;
     flex-direction: column;
+    gap: 22px;
+    min-width: 0;
+    padding: 0;
+    margin: 0;
+    border: 0;
+}
+
+.bg-settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+}
+
+.bg-settings-section + .bg-settings-section {
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.bg-settings-section h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.94);
+}
+
+.bg-setting-control {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.bg-setting-control label,
+.bg-setting-caption,
+.bg-toggle-row > label {
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.bg-setting-label,
+.bg-toggle-row,
+.bg-library-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 12px;
 }
 
-.bg-settings-item {
+.bg-settings-panel select,
+.bg-settings-panel input[type='text'],
+.bg-settings-panel input[type='number'] {
+    width: 100%;
+    min-width: 0;
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.055);
+    color: rgba(255, 255, 255, 0.92);
+    font: inherit;
+    font-size: 13px;
+}
+
+.bg-settings-panel select {
+    cursor: pointer;
+}
+
+.bg-settings-panel option {
+    background: #1d272f;
+    color: white;
+}
+
+.bg-settings-panel input:focus,
+.bg-settings-panel select:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.bg-settings-panel input:invalid {
+    border-color: rgba(255, 162, 144, 0.65);
+}
+
+.bg-number-control {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+    min-width: 66px;
+    height: 28px;
+    padding: 0 6px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.bg-settings-panel .bg-number-control input {
+    width: 38px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: right;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    appearance: textfield;
+}
+
+.bg-number-control:focus-within {
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.bg-number-control span,
+.bg-interval-custom span {
+    color: rgba(255, 255, 255, 0.48);
+    font-size: 11px;
+}
+
+.bg-number-control input::-webkit-inner-spin-button,
+.bg-number-control input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.bg-setting-control input[type='range'] {
+    width: 100%;
+    height: 20px;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    background: transparent;
+    appearance: none;
+    cursor: pointer;
+}
+
+.bg-setting-control input[type='range']::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 4px;
+    background: linear-gradient(to right, rgba(255,255,255,0.65) var(--range-fill, 0%), rgba(255,255,255,0.14) var(--range-fill, 0%));
+}
+
+.bg-setting-control input[type='range']::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+    border: 2px solid #d8dfe3;
+    border-radius: 50%;
+    background: #f3f5f6;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+
+.bg-setting-control input[type='range']::-moz-range-track {
+    height: 4px;
+    border-radius: 4px;
+    background: linear-gradient(to right, rgba(255,255,255,0.65) var(--range-fill, 0%), rgba(255,255,255,0.14) var(--range-fill, 0%));
+}
+
+.bg-setting-control input[type='range']::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border: 1px solid #d8dfe3;
+    border-radius: 50%;
+    background: #f3f5f6;
+}
+
+.bg-switch {
+    position: relative;
+    display: inline-flex;
+    cursor: pointer;
+}
+
+.bg-switch-track {
+    width: 34px;
+    height: 20px;
+    padding: 3px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.18);
+    transition: background-color 0.14s ease;
+}
+
+.bg-switch-track::after {
+    content: '';
+    display: block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: white;
+    transition: transform 0.14s ease;
+}
+
+.bg-switch input:checked + .bg-switch-track {
+    background: #528b64;
+}
+
+.bg-switch input:checked + .bg-switch-track::after {
+    transform: translateX(14px);
+}
+
+.bg-switch input:focus-visible + .bg-switch-track {
+    outline: 2px solid rgba(255,255,255,0.7);
+    outline-offset: 3px;
+}
+
+.bg-interval-custom,
+.bg-color-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bg-settings-panel .bg-interval-custom input {
+    width: 100px;
+}
+
+.bg-color-control input[type='color'] {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 36px;
+    padding: 2px;
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 8px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.bg-color-control input[type='color']::-webkit-color-swatch-wrapper {
+    padding: 3px;
+}
+
+.bg-color-control input[type='color']::-webkit-color-swatch {
+    border: 0;
+    border-radius: 4px;
+}
+
+.bg-gradient-presets {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.bg-gradient-preset {
+    height: 44px;
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 8px;
+    color: white;
+    font-size: 11px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    cursor: pointer;
+}
+
+.bg-gradient-preset[aria-pressed='true'] {
+    outline: 2px solid rgba(255,255,255,0.8);
+    outline-offset: 1px;
+}
+
+.bg-advanced-settings {
+    margin-top: 2px;
+}
+
+.bg-advanced-settings summary {
+    color: rgba(255,255,255,0.62);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.bg-advanced-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-top: 14px;
+}
+
+.bg-library-heading span,
+#bgUploadHint,
+.bg-library-notice,
+.bg-upload-empty {
+    color: rgba(255,255,255,0.5);
+    font-size: 11px;
+    line-height: 1.6;
+}
+
+.bg-upload-btn {
+    width: 100%;
+    min-height: 36px;
+    border: 1px dashed rgba(255,255,255,0.24);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.035);
+    color: rgba(255,255,255,0.82);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.bg-upload-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.09);
+}
+
+.bg-library-capacity {
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
 
-.bg-settings-item label {
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.88);
-}
-
-.bg-settings-item select,
-.bg-settings-item input[type="range"],
-.bg-settings-item input[type="color"],
-.bg-settings-item input[type="file"] {
+#bgLibraryUsage {
+    display: block;
     width: 100%;
+    height: 3px;
+    border: 0;
+    border-radius: 3px;
+    overflow: hidden;
+    appearance: none;
+    background: rgba(255,255,255,0.08);
 }
 
-.bg-settings-item select {
-    padding: 8px 10px;
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    background: rgba(255, 255, 255, 0.08);
-    color: #f7f8fb;
+#bgLibraryUsage::-webkit-progress-bar {
+    background: rgba(255,255,255,0.08);
 }
 
-.bg-settings-item select option {
-    background: #ffffff;
-    color: #1f2537;
+#bgLibraryUsage::-webkit-progress-value {
+    background: rgba(255,255,255,0.45);
 }
 
-.bg-settings-actions button {
-    width: 100%;
-    border: none;
-    border-radius: 10px;
-    padding: 10px 14px;
-    background: linear-gradient(135deg, rgba(107, 130, 245, 0.95), rgba(127, 84, 183, 0.95));
-    color: #fff;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.bg-auto-rotate-toggle {
-    display: flex;
-    align-items: center;
-}
-
-.bg-auto-rotate-toggle .toggle-label {
-    color: rgba(255, 255, 255, 0.8);
-}
-
-.bg-settings-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.bg-settings-actions .bg-reset-btn {
-    background: rgba(255, 255, 255, 0.16);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.bg-settings-actions .bg-reset-btn:hover {
-    background: rgba(255, 255, 255, 0.24);
-}
-
-#bgUploadHint {
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.7);
+#bgLibraryUsage::-moz-progress-bar {
+    background: rgba(255,255,255,0.45);
 }
 
 .bg-uploaded-list {
-    max-height: 150px;
-    overflow-y: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.bg-uploaded-list::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-}
-
-.bg-upload-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 8px 10px;
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.08);
-}
-
-.bg-upload-item-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 12px;
-}
-
-.bg-upload-item-delete {
-    border: none;
-    padding: 4px 8px;
-    border-radius: 8px;
-    font-size: 12px;
-    color: #fff;
-    background: rgba(255, 96, 96, 0.8);
-    cursor: pointer;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
 }
 
 .bg-upload-empty {
+    grid-column: 1 / -1;
+    padding: 8px 0;
+}
+
+.bg-image-card {
+    position: relative;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.035);
+}
+
+.bg-image-card img {
+    display: block;
+    width: 100%;
+    height: 80px;
+    object-fit: cover;
+}
+
+.bg-image-name {
+    display: block;
+    padding: 6px 8px;
+    overflow: hidden;
+    color: rgba(255,255,255,0.7);
+    font-size: 11px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.bg-image-delete {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    font-size: 18px;
+    cursor: pointer;
+    opacity: 0;
+}
+
+.bg-image-card:hover .bg-image-delete,
+.bg-image-card:focus-within .bg-image-delete {
+    opacity: 1;
+}
+
+.bg-image-delete:hover {
+    background: rgba(161,57,47,0.9);
+}
+
+.bg-settings-footer {
+    flex-shrink: 0;
+    padding: 12px 16px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.bg-settings-actions,
+.bg-settings-actions > div {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.bg-settings-actions {
+    justify-content: space-between;
+}
+
+.bg-settings-actions button {
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: rgba(255,255,255,0.82);
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.65);
+    cursor: pointer;
+}
+
+.bg-settings-actions .bg-reset-btn {
+    padding: 0 6px;
+    color: rgba(255,255,255,0.5);
+}
+
+.bg-settings-actions .bg-save-btn {
+    min-width: 60px;
+    border-color: rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.16);
+    color: white;
+}
+
+.bg-settings-actions button:hover:not(:disabled) {
+    background: rgba(255,255,255,0.1);
+    color: white;
+}
+
+.bg-settings-actions .bg-save-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.24);
+}
+
+.bg-settings-panel button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.bg-settings-panel button:focus-visible {
+    outline: 2px solid rgba(255,255,255,0.75);
+    outline-offset: 2px;
+}
+
+.bg-settings-panel button {
+    -webkit-tap-highlight-color: transparent;
+}
+
+.bg-settings-message {
+    margin-bottom: 8px;
+    color: #efb3a8;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.bg-settings-panel [hidden] {
+    display: none;
+}
+
+@media (max-width: 600px) {
+    .bg-settings-panel {
+        inset: 12px;
+        width: auto;
+        max-width: none;
+    }
+
+    .bg-settings-header,
+    .bg-settings-body {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+}
+
+@media (pointer: coarse) {
+    .bg-image-delete {
+        width: 28px;
+        height: 28px;
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bg-settings-panel,
+    .bg-switch-track,
+    .bg-switch-track::after {
+        transition: none;
+    }
 }

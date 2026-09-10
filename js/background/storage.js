@@ -2,9 +2,9 @@ import {
     BACKGROUND_SETTINGS_KEY,
     BACKGROUND_RUNTIME_CACHE_KEY,
     BACKGROUND_SETTINGS_VERSION,
-    DEFAULT_BACKGROUND_SETTINGS,
     DEFAULT_RUNTIME_CACHE
 } from './config.js';
+import { normalizeBackgroundSettings } from './settings-model.js';
 
 function deepMerge(base, patch) {
     if (!patch || typeof patch !== 'object') {
@@ -42,24 +42,24 @@ function deepMerge(base, patch) {
 export function loadBackgroundSettings() {
     const raw = localStorage.getItem(BACKGROUND_SETTINGS_KEY);
     if (!raw) {
-        return { ...DEFAULT_BACKGROUND_SETTINGS };
+        return normalizeBackgroundSettings();
     }
 
     try {
         const parsed = JSON.parse(raw);
-        const merged = deepMerge(DEFAULT_BACKGROUND_SETTINGS, parsed);
+        const merged = normalizeBackgroundSettings(parsed);
         if (!merged.version || merged.version < BACKGROUND_SETTINGS_VERSION) {
             merged.version = BACKGROUND_SETTINGS_VERSION;
         }
         return merged;
     } catch (error) {
         console.error('读取背景设置失败，将使用默认值:', error);
-        return { ...DEFAULT_BACKGROUND_SETTINGS };
+        return normalizeBackgroundSettings();
     }
 }
 
 export function saveBackgroundSettings(settings) {
-    const merged = deepMerge(DEFAULT_BACKGROUND_SETTINGS, settings);
+    const merged = normalizeBackgroundSettings(settings);
     merged.version = BACKGROUND_SETTINGS_VERSION;
     localStorage.setItem(BACKGROUND_SETTINGS_KEY, JSON.stringify(merged));
     return merged;

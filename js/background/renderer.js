@@ -1,4 +1,4 @@
-import { BACKGROUND_TRANSITION_MS } from './config.js';
+import { isImageMode } from './settings-model.js';
 
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -23,25 +23,30 @@ export class BackgroundRenderer {
         this.ensureReady();
         const filters = settings.filters || {};
         const blur = clamp(Number(filters.blur || 0), 0, 20);
-        const brightness = clamp(Number(filters.brightness || 100), 60, 140);
-        const saturate = clamp(Number(filters.saturate || 100), 50, 180);
-        const contrast = clamp(Number(filters.contrast || 100), 50, 150);
-        const overlayOpacity = clamp(Number(settings.overlayOpacity || 30), 0, 70);
+        const brightness = clamp(Number(filters.brightness ?? 100), 60, 140);
+        const saturate = clamp(Number(filters.saturate ?? 100), 50, 180);
+        const contrast = clamp(Number(filters.contrast ?? 100), 50, 150);
+        const overlayOpacity = clamp(Number(settings.overlayOpacity ?? 30), 0, 70);
         const uiGlassBlur = clamp(Number(settings.uiGlassBlur ?? 5), 0, 30);
 
-        const filter = `blur(${blur}px) brightness(${brightness}%) saturate(${saturate}%) contrast(${contrast}%)`;
+        const filter = isImageMode(settings.mode)
+            ? `blur(${blur}px) brightness(${brightness}%) saturate(${saturate}%) contrast(${contrast}%)` : 'none';
         this.layerA.style.filter = filter;
         this.layerB.style.filter = filter;
         this.overlay.style.backgroundColor = `rgba(0, 0, 0, ${overlayOpacity / 100})`;
         document.body.style.setProperty('--ui-glass-blur', `${uiGlassBlur}px`);
     }
 
-    async render(candidate) {
+    render(candidate, { immediate = false } = {}) {
         this.ensureReady();
         if (!candidate) {
             return;
         }
 
+        if (immediate) {
+            this.layerA.style.transition = 'none';
+            this.layerB.style.transition = 'none';
+        }
         this.inactiveLayer.classList.remove('is-active');
         this.inactiveLayer.style.backgroundImage = '';
         this.inactiveLayer.style.background = '';
@@ -61,7 +66,12 @@ export class BackgroundRenderer {
         this.activeLayer = this.inactiveLayer;
         this.inactiveLayer = prev;
 
-        await new Promise((resolve) => setTimeout(resolve, BACKGROUND_TRANSITION_MS));
+        if (immediate) {
+            // 预览直接到达目标画面，避免连续调色时反复淡入淡出。
+            void this.layerA.offsetWidth;
+            this.layerA.style.removeProperty('transition');
+            this.layerB.style.removeProperty('transition');
+        }
     }
 }
 

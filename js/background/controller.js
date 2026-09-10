@@ -1,23 +1,19 @@
-import { BACKGROUND_MODES, DEFAULT_BACKGROUND_SETTINGS, PRELOAD_TIMEOUT_MS } from './config.js';
+import { BACKGROUND_MODES, PRELOAD_TIMEOUT_MS } from './config.js';
 import { loadBackgroundSettings, loadRuntimeCache, saveBackgroundSettings, saveRuntimeCache } from './storage.js';
-import { getLocalCandidates, getPreferredCustomCandidate, getDefaultTransitionCandidates } from './sources/local-source.js';
+import { normalizeBackgroundSettings, backgroundSourceKey, isImageMode, sameBackgroundSettings } from './settings-model.js';
+import { getLocalCandidates, getDefaultTransitionCandidates } from './sources/local-source.js';
 import { getOnlineCandidates } from './sources/online-source.js';
 import { preloadImage } from './preloader.js';
 import { BackgroundRenderer } from './renderer.js';
-import {
-    saveCustomImage,
-    listCustomImages,
-    removeCustomImage,
-    getCustomImageStats
-} from './custom-image-library.js';
+import { saveCustomImage, listCustomImages, removeCustomImage, getCustomImageStats, getCustomImageBlob } from './custom-image-library.js';
 
 function shuffle(list) {
-    const arr = [...list];
-    for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
+    const result = [...list];
+    for (let index = result.length - 1; index > 0; index--) {
+        const target = Math.floor(Math.random() * (index + 1));
+        [result[index], result[target]] = [result[target], result[index]];
     }
-    return arr;
+    return result;
 }
 
 export class BackgroundController {
@@ -29,35 +25,95 @@ export class BackgroundController {
         this.timerId = null;
         this.currentSignature = '';
         this.currentRenderedCandidate = null;
+        this.previewState = null;
+        this.requestVersion = 0;
+        this.requestController = null;
+        this.pendingBackground = null;
     }
 
     async init() {
         this.renderer.applyVisualSettings(this.settings);
-        const startupCandidate = await this.resolveStartupCandidate();
-        if (startupCandidate) {
-            try {
-                await this.ensureCandidateReady(startupCandidate);
-                await this.renderer.render(startupCandidate);
-                this.markSuccess(startupCandidate);
-            } catch (error) {
-                this.markFailure(startupCandidate);
-            }
-        }
-
-        await this.nextBackground({ silent: true });
+        const initial = this.flatCandidate(this.settings) || getDefaultTransitionCandidates()[0];
+        this.showCandidate(initial, { persist: false, immediate: true });
+        if (isImageMode(this.settings.mode)) await this.nextBackground({ silent: true, initial: true });
         this.startAutoRotateIfNeeded();
     }
 
     getSettings() {
-        return JSON.parse(JSON.stringify(this.settings));
+        return normalizeBackgroundSettings(this.settings);
     }
 
-    async resetSettings() {
-        const defaults = JSON.parse(JSON.stringify(DEFAULT_BACKGROUND_SETTINGS));
-        this.settings = saveBackgroundSettings(defaults);
-        this.renderer.applyVisualSettings(this.settings);
+    effectiveSettings() {
+        return this.previewState?.settings || this.settings;
+    }
+
+    getPreviewStatus() {
+        const preview = this.previewState;
+        return {
+            pending: Boolean(this.pendingBackground),
+            changed: Boolean(preview && (!sameBackgroundSettings(preview.settings, this.settings)
+                || (preview.originalCandidate && this.currentSignature !== this.getCandidateSignature(preview.originalCandidate)))),
+            error: preview?.error ? '暂时无法预览背景，请切换模式或稍后重试。' : ''
+        };
+    }
+
+    notifyPreviewChange() {
+        if (this.previewState) this.options.onPreviewChange?.();
+    }
+
+    // 编辑期间保留原壁纸引用，草稿与持久化配置完全分离。
+    beginPreview() {
+        if (!this.previewState) {
+            this.cancelPendingBackground();
+            this.stopAutoRotate();
+            this.previewState = {
+                settings: this.getSettings(),
+                originalCandidate: this.currentRenderedCandidate,
+                error: null
+            };
+        }
+        return normalizeBackgroundSettings(this.previewState.settings);
+    }
+
+    previewSettings(patch) {
+        if (!this.previewState) throw new Error('尚未开始设置预览');
+        const previousKey = backgroundSourceKey(this.previewState.settings);
+        this.previewState.settings = normalizeBackgroundSettings(patch, this.previewState.settings);
+        this.renderer.applyVisualSettings(this.previewState.settings);
+        if (previousKey !== backgroundSourceKey(this.previewState.settings)) {
+            return this.nextBackground({ silent: true });
+        }
+        return this.pendingBackground || Promise.resolve(this.currentRenderedCandidate);
+    }
+
+    async commitPreview() {
+        const preview = this.previewState;
+        if (!preview) return false;
+        while (this.pendingBackground) {
+            await this.pendingBackground;
+            if (this.previewState !== preview) return false;
+        }
+        if (preview.error) throw preview.error;
+        // 先完成配置写入；失败时保留草稿，允许重试或取消。
+        const saved = saveBackgroundSettings(preview.settings);
+        this.settings = saved;
+        this.previewState = null;
+        if (preview.originalCandidate !== this.currentRenderedCandidate) this.releaseCandidate(preview.originalCandidate);
+        this.recordSuccess(this.currentRenderedCandidate);
         this.startAutoRotateIfNeeded();
-        await this.nextBackground({ silent: true });
+        return true;
+    }
+
+    cancelPreview() {
+        const preview = this.previewState;
+        if (!preview) return;
+        this.cancelPendingBackground();
+        this.previewState = null;
+        this.renderer.applyVisualSettings(this.settings);
+        // 图库删除独立生效，已经删除的原图以可用的默认背景代替。
+        const original = preview.originalCandidate || this.flatCandidate(this.settings) || getDefaultTransitionCandidates()[0];
+        this.showCandidate(original, { persist: false, immediate: true });
+        this.startAutoRotateIfNeeded();
     }
 
     async addCustomImage(file) {
@@ -68,209 +124,210 @@ export class BackgroundController {
         return listCustomImages();
     }
 
-    async removeCustomImage(recordId) {
-        if (this.currentRenderedCandidate && this.currentRenderedCandidate.id === recordId) {
-            this.currentRenderedCandidate = null;
-            this.currentSignature = '';
-        }
-        await removeCustomImage(recordId);
-    }
-
     async getCustomImageStats() {
         return getCustomImageStats();
     }
 
-    async updateSettings(patch) {
-        const previousMode = this.settings.mode;
-        const merged = {
-            ...this.settings,
-            ...patch,
-            filters: {
-                ...this.settings.filters,
-                ...(patch && patch.filters ? patch.filters : {})
-            },
-            sourcePolicy: {
-                ...this.settings.sourcePolicy,
-                ...(patch && patch.sourcePolicy ? patch.sourcePolicy : {})
-            }
-        };
-
-        this.settings = saveBackgroundSettings(merged);
-        this.renderer.applyVisualSettings(this.settings);
-        this.startAutoRotateIfNeeded();
-
-        if (patch && patch.mode && patch.mode !== previousMode) {
-            await this.nextBackground({ silent: true });
+    async removeCustomImage(recordId) {
+        await removeCustomImage(recordId);
+        const refreshBackground = Boolean(this.pendingBackground) || this.currentRenderedCandidate?.id === recordId;
+        if (refreshBackground) this.cancelPendingBackground();
+        if (this.previewState?.originalCandidate?.id === recordId) {
+            const original = this.previewState.originalCandidate;
+            this.previewState.originalCandidate = null;
+            if (original !== this.currentRenderedCandidate) this.releaseCandidate(original);
+        }
+        if (this.currentRenderedCandidate?.id === recordId) {
+            const settings = this.effectiveSettings();
+            this.showCandidate(this.flatCandidate(settings) || getDefaultTransitionCandidates()[0], {
+                persist: !this.previewState, immediate: true
+            });
+        }
+        if (refreshBackground && isImageMode(this.effectiveSettings().mode)) {
+            this.nextBackground({ silent: true }).catch(() => this.options.onStatus?.('图片已删除，背景暂时无法更新'));
         }
     }
 
-    async nextBackground({ silent = false } = {}) {
-        const candidates = await this.buildCandidates();
-        if (candidates.length === 0) {
-            throw new Error('没有可用的背景候选项');
+    flatCandidate(settings) {
+        if (settings.mode === BACKGROUND_MODES.SOLID) {
+            return { type: 'solid', source: 'solid', value: settings.solidColor };
         }
-
-        const usable = candidates.filter((item) => !this.runtimeCache.failedUrls.includes(item.url || item.value));
-        const prioritized = usable.length > 0 ? usable : candidates;
-        const queue = shuffle(prioritized).filter((item) => this.getCandidateSignature(item) !== this.currentSignature);
-        const finalQueue = queue.length > 0 ? queue : prioritized;
-
-        let lastError = null;
-        for (const candidate of finalQueue) {
-            try {
-                await this.ensureCandidateReady(candidate);
-                await this.renderer.render(candidate);
-                this.markSuccess(candidate);
-                if (!silent && this.options.onStatus) {
-                    this.options.onStatus('背景已更新');
-                }
-                return candidate;
-            } catch (error) {
-                lastError = error;
-                this.markFailure(candidate);
-            }
-        }
-
-        if (lastError) {
-            throw lastError;
-        }
-    }
-
-    destroy() {
-        if (this.timerId) {
-            clearInterval(this.timerId);
-            this.timerId = null;
-        }
-        if (this.currentRenderedCandidate && this.currentRenderedCandidate.temporary && this.currentRenderedCandidate.url) {
-            URL.revokeObjectURL(this.currentRenderedCandidate.url);
-            this.currentRenderedCandidate = null;
-        }
-    }
-
-    async buildCandidates() {
-        const mode = this.settings.mode || BACKGROUND_MODES.MIXED;
-
-        if (mode === BACKGROUND_MODES.SOLID) {
-            return [{ type: 'solid', source: 'solid', value: this.settings.solidColor || DEFAULT_BACKGROUND_SETTINGS.solidColor }];
-        }
-
-        if (mode === BACKGROUND_MODES.GRADIENT) {
-            return [{ type: 'gradient', source: 'gradient', value: this.settings.gradientPreset || DEFAULT_BACKGROUND_SETTINGS.gradientPreset }];
-        }
-
-        if (mode === BACKGROUND_MODES.LOCAL) {
-            return await getLocalCandidates();
-        }
-
-        if (mode === BACKGROUND_MODES.ONLINE) {
-            return await getOnlineCandidates();
-        }
-
-        const [localCandidates, onlineCandidates] = await Promise.all([
-            getLocalCandidates(),
-            getOnlineCandidates()
-        ]);
-        return [...localCandidates, ...onlineCandidates];
-    }
-
-    async resolveStartupCandidate() {
-        const mode = this.settings.mode || BACKGROUND_MODES.MIXED;
-
-        if (mode === BACKGROUND_MODES.SOLID) {
-            return { type: 'solid', source: 'solid', value: this.settings.solidColor || DEFAULT_BACKGROUND_SETTINGS.solidColor };
-        }
-
-        if (mode === BACKGROUND_MODES.GRADIENT) {
-            return { type: 'gradient', source: 'gradient', value: this.settings.gradientPreset || DEFAULT_BACKGROUND_SETTINGS.gradientPreset };
-        }
-
-        if (mode === BACKGROUND_MODES.LOCAL) {
-            const custom = await getPreferredCustomCandidate();
-            if (custom) {
-                return custom;
-            }
-            return this.resolveFirstAvailableDefaultTransition();
-        }
-
-        if (mode === BACKGROUND_MODES.ONLINE) {
-            return this.resolveFirstAvailableDefaultTransition();
-        }
-
-        const custom = await getPreferredCustomCandidate();
-        if (custom) {
-            return custom;
-        }
-        return this.resolveFirstAvailableDefaultTransition();
-    }
-
-    async resolveFirstAvailableDefaultTransition() {
-        const defaults = getDefaultTransitionCandidates();
-        for (const candidate of defaults) {
-            try {
-                await this.ensureCandidateReady(candidate);
-                return candidate;
-            } catch (error) {
-                this.markFailure(candidate);
-            }
+        if (settings.mode === BACKGROUND_MODES.GRADIENT) {
+            return { type: 'gradient', source: 'gradient', value: settings.gradientPreset };
         }
         return null;
     }
 
-    async ensureCandidateReady(candidate) {
-        if (candidate.type !== 'image') {
-            return;
+    cancelPendingBackground() {
+        this.requestVersion++;
+        this.requestController?.abort();
+        this.requestController = null;
+        this.pendingBackground = null;
+    }
+
+    nextBackground({ silent = false, initial = false } = {}) {
+        this.cancelPendingBackground();
+        const controller = new AbortController();
+        const version = this.requestVersion;
+        const settings = normalizeBackgroundSettings(this.effectiveSettings());
+        this.requestController = controller;
+        if (this.previewState) this.previewState.error = null;
+        const operation = this.loadBackground(settings, controller.signal, version, { silent, initial });
+        this.pendingBackground = operation;
+        this.notifyPreviewChange();
+        const settle = () => {
+            if (this.pendingBackground === operation) this.pendingBackground = null;
+            if (this.requestController === controller) this.requestController = null;
+            this.notifyPreviewChange();
+        };
+        operation.then(settle, settle);
+        return operation;
+    }
+
+    async loadBackground(settings, signal, version, { silent, initial }) {
+        try {
+            const candidates = await this.buildCandidates(settings, signal);
+            signal.throwIfAborted();
+            const usable = candidates.filter(candidate => !this.runtimeCache.failedUrls.includes(this.candidateKey(candidate)));
+            const available = usable.length ? usable : candidates;
+            const ordered = settings.mode === BACKGROUND_MODES.ONLINE
+                ? [...shuffle(available.filter(candidate => candidate.source !== 'local-default')),
+                    ...available.filter(candidate => candidate.source === 'local-default')]
+                : initial && settings.mode === BACKGROUND_MODES.LOCAL ? available : shuffle(available);
+            const prioritizeDifferent = list => [
+                ...list.filter(candidate => this.getCandidateSignature(candidate) !== this.currentSignature),
+                ...list.filter(candidate => this.getCandidateSignature(candidate) === this.currentSignature)
+            ];
+            const queue = settings.mode === BACKGROUND_MODES.ONLINE
+                ? [...prioritizeDifferent(ordered.filter(candidate => candidate.source !== 'local-default')),
+                    ...ordered.filter(candidate => candidate.source === 'local-default')]
+                : prioritizeDifferent(ordered);
+            let lastError = new Error('没有可用的背景图片');
+            for (const candidate of queue) {
+                let ready = null;
+                try {
+                    ready = await this.ensureCandidateReady(candidate, signal);
+                    signal.throwIfAborted();
+                    if (version !== this.requestVersion) {
+                        this.releaseCandidate(ready);
+                        return null;
+                    }
+                    this.showCandidate(ready, { persist: !this.previewState, immediate: Boolean(this.previewState) });
+                    if (!silent) this.options.onStatus?.('背景已更新');
+                    return ready;
+                } catch (error) {
+                    if (ready && ready !== this.currentRenderedCandidate) this.releaseCandidate(ready);
+                    if (signal.aborted || error.name === 'AbortError') throw error;
+                    lastError = error;
+                    if (!this.previewState) this.recordFailure(candidate);
+                }
+            }
+            throw lastError;
+        } catch (error) {
+            if (signal.aborted || version !== this.requestVersion || error.name === 'AbortError') return null;
+            if (this.previewState) this.previewState.error = error;
+            throw error;
         }
-        await preloadImage(candidate.url, PRELOAD_TIMEOUT_MS);
+    }
+
+    async buildCandidates(settings, signal) {
+        const flat = this.flatCandidate(settings);
+        if (flat) return [flat];
+        if (settings.mode === BACKGROUND_MODES.LOCAL) return getLocalCandidates();
+        if (settings.mode === BACKGROUND_MODES.ONLINE) {
+            return [...await getOnlineCandidates(signal), ...getDefaultTransitionCandidates()];
+        }
+        const [local, online] = await Promise.all([getLocalCandidates(), getOnlineCandidates(signal)]);
+        return [...local, ...online];
+    }
+
+    async ensureCandidateReady(candidate, signal) {
+        signal.throwIfAborted();
+        if (candidate.type !== 'image') return candidate;
+        let ready = candidate;
+        if (candidate.source === 'custom' && !candidate.url) {
+            const blob = await getCustomImageBlob(candidate.id);
+            signal.throwIfAborted();
+            ready = { ...candidate, url: URL.createObjectURL(blob), temporary: true };
+        }
+        try {
+            await preloadImage(ready.url, PRELOAD_TIMEOUT_MS, signal);
+            signal.throwIfAborted();
+            return ready;
+        } catch (error) {
+            if (ready !== this.currentRenderedCandidate && ready !== this.previewState?.originalCandidate) this.releaseCandidate(ready);
+            throw error;
+        }
+    }
+
+    candidateKey(candidate) {
+        return candidate?.cacheKey || candidate?.url || candidate?.value || '';
     }
 
     getCandidateSignature(candidate) {
-        return `${candidate.type}:${candidate.cacheKey || candidate.url || candidate.value || ''}`;
+        return candidate.type + ':' + this.candidateKey(candidate);
     }
 
-    markSuccess(candidate) {
-        if (this.currentRenderedCandidate && this.currentRenderedCandidate.temporary && this.currentRenderedCandidate.url) {
-            URL.revokeObjectURL(this.currentRenderedCandidate.url);
-        }
-        const signature = this.getCandidateSignature(candidate);
-        this.currentSignature = signature;
-        const key = candidate.cacheKey || candidate.url || candidate.value || '';
+    showCandidate(candidate, { persist = true, immediate = false } = {}) {
+        this.renderer.render(candidate, { immediate });
+        const previous = this.currentRenderedCandidate;
         this.currentRenderedCandidate = candidate;
-
-        this.runtimeCache.lastSuccessfulUrl = key;
-        this.runtimeCache.failedUrls = this.runtimeCache.failedUrls.filter((item) => item !== key);
-        this.runtimeCache.recentHistory = [key, ...this.runtimeCache.recentHistory.filter((item) => item !== key)].slice(0, 10);
-        this.runtimeCache = saveRuntimeCache(this.runtimeCache);
+        this.currentSignature = this.getCandidateSignature(candidate);
+        if (previous !== candidate && previous !== this.previewState?.originalCandidate) this.releaseCandidate(previous);
+        if (persist) this.recordSuccess(candidate);
     }
 
-    markFailure(candidate) {
-        if (candidate.temporary && candidate.url) {
-            URL.revokeObjectURL(candidate.url);
-        }
-        const key = candidate.cacheKey || candidate.url || candidate.value || '';
-        if (!key) {
-            return;
-        }
+    recordSuccess(candidate) {
+        if (!candidate) return;
+        const key = this.candidateKey(candidate);
+        this.runtimeCache.lastSuccessfulUrl = key;
+        this.runtimeCache.failedUrls = this.runtimeCache.failedUrls.filter(item => item !== key);
+        this.runtimeCache.recentHistory = [key, ...this.runtimeCache.recentHistory.filter(item => item !== key)].slice(0, 10);
+        this.persistRuntimeCache();
+    }
 
-        this.runtimeCache.failedUrls = [key, ...this.runtimeCache.failedUrls.filter((item) => item !== key)].slice(0, 20);
-        this.runtimeCache = saveRuntimeCache(this.runtimeCache);
+    recordFailure(candidate) {
+        const key = this.candidateKey(candidate);
+        this.runtimeCache.failedUrls = [key, ...this.runtimeCache.failedUrls.filter(item => item !== key)].slice(0, 20);
+        this.persistRuntimeCache();
+    }
+
+    persistRuntimeCache() {
+        try {
+            this.runtimeCache = saveRuntimeCache(this.runtimeCache);
+        } catch (error) {
+            // 缓存失败不应把已经显示的壁纸或已保存的配置判为失败。
+            console.warn('保存背景运行缓存失败:', error);
+        }
+    }
+
+    releaseCandidate(candidate) {
+        if (candidate?.temporary && candidate.url) {
+            URL.revokeObjectURL(candidate.url);
+            candidate.temporary = false;
+        }
+    }
+
+    stopAutoRotate() {
+        clearInterval(this.timerId);
+        this.timerId = null;
     }
 
     startAutoRotateIfNeeded() {
-        if (this.timerId) {
-            clearInterval(this.timerId);
-            this.timerId = null;
-        }
-
-        if (!this.settings.autoRotate) {
-            return;
-        }
-
-        const interval = Math.max(10, Number(this.settings.rotateIntervalSec || 300)) * 1000;
+        this.stopAutoRotate();
+        if (this.previewState || !this.settings.autoRotate || !isImageMode(this.settings.mode)) return;
         this.timerId = setInterval(() => {
-            this.nextBackground({ silent: true }).catch((error) => {
-                console.error('自动轮播切换失败:', error);
-            });
-        }, interval);
+            this.nextBackground({ silent: true }).catch(error => console.error('自动轮播切换失败:', error));
+        }, this.settings.rotateIntervalSec * 1000);
+    }
+
+    destroy() {
+        this.cancelPendingBackground();
+        this.stopAutoRotate();
+        if (this.previewState?.originalCandidate !== this.currentRenderedCandidate) this.releaseCandidate(this.previewState?.originalCandidate);
+        this.releaseCandidate(this.currentRenderedCandidate);
+        this.previewState = null;
+        this.currentRenderedCandidate = null;
     }
 }
 

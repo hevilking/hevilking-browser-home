@@ -61,10 +61,17 @@ async function openPage(t, items = fixture(), options = {}) {
             sessionStorage.setItem('shortcut-test-seeded', 'true');
         }
         window.shortcutTestWrites = 0;
+        window.backgroundTestWrites = 0;
+        window.backgroundRuntimeWrites = 0;
         document.addEventListener('pointerdown', event => { window.shortcutTestPointer = event.pointerId; }, true);
         const setItem = Storage.prototype.setItem;
         Storage.prototype.setItem = function(key, value) {
             if (this === localStorage && key === 'shortcuts') window.shortcutTestWrites++;
+            if (this === localStorage && key === 'backgroundSettings') {
+                window.backgroundTestWrites++;
+                if (window.backgroundTestFailSave) throw new DOMException('模拟配置存储已满', 'QuotaExceededError');
+            }
+            if (this === localStorage && key === 'backgroundRuntimeCache') window.backgroundRuntimeWrites++;
             if (this === localStorage && key === 'shortcuts' && window.shortcutTestFailSave) {
                 throw new DOMException('模拟存储已满', 'QuotaExceededError');
             }
@@ -807,4 +814,322 @@ test('窄屏和低高度表单仍能填写提交，必填及重复网址校验�
     await modal.waitFor({ state: 'hidden' });
     assert.equal((await saved(page)).at(-1).name, '窄屏新增');
     assert.equal(await writes(page), 1);
+});
+
+const storedBackground = page => page.evaluate(() => localStorage.getItem('backgroundSettings'));
+const backgroundWrites = page => page.evaluate(() => window.backgroundTestWrites);
+const backgroundFrame = page => page.evaluate(() => {
+    const layer = document.querySelector('.background-layer.is-active');
+    return { image: layer.style.backgroundImage, color: layer.style.backgroundColor,
+        filter: layer.style.filter, overlay: document.querySelector('#backgroundOverlay').style.backgroundColor,
+        glass: document.body.style.getPropertyValue('--ui-glass-blur') };
+});
+const openSettings = async page => {
+    await page.locator('#wallpaperSettingsBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => document.querySelector('#bgSettingsPanel').getAnimations().length === 0);
+};
+const waitForSettingsSave = page => page.waitForFunction(() => !document.querySelector('#bgApplyBtn').disabled);
+
+async function wallpaperFixture(page) {
+    const data = await page.evaluate(() => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 160;
+        canvas.height = 90;
+        const context = canvas.getContext('2d');
+        const gradient = context.createLinearGradient(0, 0, 160, 90);
+        gradient.addColorStop(0, '#416a75');
+        gradient.addColorStop(1, '#bc8069');
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, 160, 90);
+        return canvas.toDataURL('image/png').split(',')[1];
+    });
+    return { name: '示例壁纸.png', mimeType: 'image/png', buffer: Buffer.from(data, 'base64') };
+}
+
+test('设置实时预览保留合法零值，取消恢复原画面和原配置', async t => {
+    const { page } = await openPage(t);
+    const originalSettings = await storedBackground(page);
+    const originalFrame = await backgroundFrame(page);
+    await openSettings(page);
+    assert.equal(await page.locator('#bgApplyBtn').isDisabled(), true);
+    await page.locator('#bgOverlayOpacityValue').fill('0');
+    await page.locator('#bgUiGlassBlurValue').fill('12');
+    await page.locator('#bgSolidColorHex').fill('#112233');
+    await waitForSettingsSave(page);
+    assert.equal((await backgroundFrame(page)).color, 'rgb(17, 34, 51)');
+    assert.equal((await backgroundFrame(page)).overlay, 'rgba(0, 0, 0, 0)');
+    assert.equal((await backgroundFrame(page)).glass, '12px');
+    assert.equal(await storedBackground(page), originalSettings);
+    assert.equal(await backgroundWrites(page), 0);
+    await page.mouse.click(10, 500);
+    assert.equal(await page.locator('#bgSettingsPanel.active').count(), 1);
+    await captureScreenshot(page, 'settings-solid.png');
+    await page.locator('#bgCancelBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    assert.deepEqual(await backgroundFrame(page), originalFrame);
+    assert.equal(await storedBackground(page), originalSettings);
+    assert.equal(await backgroundWrites(page), 0);
+});
+
+test('模式控制相关选项，轮播自定义和渐变预设可保存，默认值先预览', async t => {
+    const { page } = await openPage(t);
+    await openSettings(page);
+    assert.equal(await page.locator('#bgSolidColorRow').isVisible(), true);
+    assert.equal(await page.locator('#bgRotationSection').isVisible(), false);
+    await page.locator('#bgModeSelect').selectOption('local');
+    await waitForSettingsSave(page);
+    assert.equal(await page.locator('#bgRotationSection').isVisible(), true);
+    assert.equal(await page.locator('#bgRotateIntervalRow').isVisible(), false);
+    await page.locator('.bg-switch').click();
+    await page.locator('#bgRotatePreset').selectOption('custom');
+    await page.locator('#bgRotateInterval').fill('90');
+    assert.equal(await page.locator('#bgRotateCustomRow').isVisible(), true);
+    await page.locator('#bgAdvancedSettings summary').click();
+    await page.locator('#bgBrightnessValue').fill('104');
+    await page.locator('#bgModeSelect').selectOption('gradient');
+    assert.equal(await page.locator('#bgRotationSection').isVisible(), false);
+    assert.equal(await page.locator('#bgAdvancedSettings').isVisible(), false);
+    await page.getByRole('button', { name: '松林', exact: true }).click();
+    await waitForSettingsSave(page);
+    await page.locator('#bgSettingsForm').evaluate(form => { form.scrollTop = 0; });
+    await captureScreenshot(page, 'settings-gradient.png');
+    const preview = await backgroundFrame(page);
+    await page.locator('#bgApplyBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    assert.deepEqual(await backgroundFrame(page), preview, '保存不应再随机更换壁纸');
+    const savedSettings = JSON.parse(await storedBackground(page));
+    assert.equal(savedSettings.mode, 'gradient');
+    assert.equal(savedSettings.rotateIntervalSec, 90);
+    assert.equal(savedSettings.filters.brightness, 104);
+    assert.match(savedSettings.gradientPreset, /#134e5e/);
+    await page.reload();
+    await openSettings(page);
+    assert.equal(await page.locator('#bgApplyBtn').isDisabled(), true);
+    assert.equal(await page.getByRole('button', { name: '松林', exact: true }).getAttribute('aria-pressed'), 'true');
+    const beforeReset = await storedBackground(page);
+    await page.locator('#bgResetBtn').click();
+    await waitForSettingsSave(page);
+    assert.equal(await page.locator('#bgModeSelect').inputValue(), 'mixed');
+    assert.equal(await storedBackground(page), beforeReset);
+    await page.locator('#bgSettingsClose').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    assert.equal(await storedBackground(page), beforeReset);
+});
+
+test('图片滤镜不换图，固定头尾在滚动时可操作，保存失败可重试', async t => {
+    const { page } = await openPage(t);
+    await page.evaluate(() => localStorage.setItem('backgroundSettings', JSON.stringify({ mode: 'local', autoRotate: false })));
+    await page.reload();
+    await page.waitForFunction(() => window.backgroundRuntimeWrites > 0);
+    let imageRequests = 0;
+    page.on('request', request => { if (request.resourceType() === 'image') imageRequests++; });
+    await openSettings(page);
+    const originalImage = (await backgroundFrame(page)).image;
+    const requestCount = imageRequests;
+    const footer = await page.locator('.bg-settings-footer').boundingBox();
+    const header = await page.locator('.bg-settings-header').boundingBox();
+    await page.locator('#bgBlurValue').fill('4');
+    await page.locator('#bgAdvancedSettings summary').click();
+    await page.locator('#bgBrightnessValue').fill('110');
+    await page.locator('#bgSaturateValue').fill('88');
+    await waitForSettingsSave(page);
+    assert.equal((await backgroundFrame(page)).image, originalImage);
+    assert.match((await backgroundFrame(page)).filter, /blur\(4px\).*brightness\(110%\).*saturate\(88%\)/);
+    assert.equal(imageRequests, requestCount);
+    await captureScreenshot(page, 'settings-image.png');
+    await page.locator('#bgSettingsForm').evaluate(form => { form.scrollTop = form.scrollHeight; });
+    assert.deepEqual(await page.locator('.bg-settings-footer').boundingBox(), footer);
+    assert.deepEqual(await page.locator('.bg-settings-header').boundingBox(), header);
+    const originalSettings = await storedBackground(page);
+    await page.evaluate(() => { window.backgroundTestFailSave = true; });
+    await page.locator('#bgApplyBtn').click();
+    await page.locator('#bgSettingsMessage').waitFor({ state: 'visible' });
+    assert.match(await page.locator('#bgSettingsMessage').textContent(), /保存失败/);
+    assert.equal(await storedBackground(page), originalSettings);
+    assert.equal(await page.locator('#bgSettingsPanel.active').count(), 1);
+    await page.evaluate(() => { window.backgroundTestFailSave = false; });
+    await page.locator('#bgApplyBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    assert.equal(JSON.parse(await storedBackground(page)).filters.brightness, 110);
+});
+
+test('数字和滑块互相同步，非法输入不保存，窄屏操作栏始终可见', async t => {
+    const { page } = await openPage(t, fixture(2), { viewport: { width: 360, height: 640 }, isMobile: true, hasTouch: true });
+    await openSettings(page);
+    await page.locator('#bgUiGlassBlurValue').fill('99');
+    assert.equal(await page.locator('#bgApplyBtn').isDisabled(), true);
+    await page.locator('#bgUiGlassBlur').evaluate(input => {
+        input.value = '8';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await waitForSettingsSave(page);
+    assert.equal(await page.locator('#bgUiGlassBlurValue').inputValue(), '8');
+    await page.locator('#bgSolidColorHex').fill('abc');
+    await waitForSettingsSave(page);
+    assert.equal(await page.locator('#bgSolidColor').inputValue(), '#aabbcc');
+    const footer = await page.locator('.bg-settings-footer').boundingBox();
+    await page.locator('#bgSettingsForm').evaluate(form => { form.scrollTop = form.scrollHeight; });
+    const after = await page.locator('.bg-settings-footer').boundingBox();
+    assert.deepEqual(after, footer);
+    assert.ok(after.y >= 0 && after.y + after.height <= 640);
+    await captureScreenshot(page, 'settings-mobile.png');
+    await page.locator('#bgApplyBtn').tap();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    const savedSettings = JSON.parse(await storedBackground(page));
+    assert.equal(savedSettings.uiGlassBlur, 8);
+    assert.equal(savedSettings.solidColor, '#aabbcc');
+});
+
+test('图库缩略图上传和删除即时保存，取消设置不撤销图库操作并释放缩略图资源', async t => {
+    const { page } = await openPage(t);
+    const file = await wallpaperFixture(page);
+    await page.evaluate(() => {
+        window.backgroundRevokedUrls = [];
+        const revoke = URL.revokeObjectURL.bind(URL);
+        URL.revokeObjectURL = url => { window.backgroundRevokedUrls.push(url); revoke(url); };
+    });
+    await openSettings(page);
+    const originalSettings = await storedBackground(page);
+    await page.locator('#bgUploadInput').setInputFiles(file);
+    await page.waitForFunction(() => document.querySelector('#bgUploadedList img')?.naturalWidth > 0);
+    const thumbnailUrl = await page.locator('#bgUploadedList img').getAttribute('src');
+    assert.match(thumbnailUrl, /^blob:/);
+    assert.equal(await page.locator('#bgLibraryCount').textContent(), '1 / 30');
+    assert.equal(await backgroundWrites(page), 0);
+    assert.equal(await page.locator('#bgApplyBtn').isDisabled(), true);
+    await page.locator('#bgSettingsForm').evaluate(form => { form.scrollTop = form.scrollHeight; });
+    await captureScreenshot(page, 'settings-library.png');
+    await page.locator('#bgCancelBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    assert.equal(await page.evaluate(url => window.backgroundRevokedUrls.includes(url), thumbnailUrl), true);
+    await openSettings(page);
+    await page.waitForFunction(() => document.querySelector('#bgUploadedList img')?.naturalWidth > 0);
+    assert.equal(await page.locator('#bgLibraryCount').textContent(), '1 / 30');
+    await page.locator('.bg-image-card').hover();
+    await page.locator('.bg-image-delete').click();
+    await page.waitForFunction(() => document.querySelector('#bgLibraryCount').textContent === '0 / 30');
+    await page.locator('#bgCancelBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    await openSettings(page);
+    await page.locator('#bgUploadInput').setInputFiles({ name: '错误文件.txt', mimeType: 'text/plain', buffer: Buffer.from('invalid') });
+    await page.locator('.notification').filter({ hasText: '仅支持图片文件' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#bgLibraryCount').textContent(), '0 / 30');
+    assert.equal(await storedBackground(page), originalSettings);
+});
+
+test('取消预览能恢复原来的本地图片，提交新背景后才释放旧图片引用', async t => {
+    const { page } = await openPage(t);
+    const file = await wallpaperFixture(page);
+    await page.route('**/assets/images/undifine.webp', route => route.abort());
+    await page.evaluate(() => {
+        window.backgroundRevokedUrls = [];
+        const revoke = URL.revokeObjectURL.bind(URL);
+        URL.revokeObjectURL = url => { window.backgroundRevokedUrls.push(url); revoke(url); };
+    });
+    await openSettings(page);
+    await page.locator('#bgUploadInput').setInputFiles(file);
+    await page.waitForFunction(() => document.querySelector('#bgLibraryCount').textContent === '1 / 30');
+    await page.locator('#bgModeSelect').selectOption('local');
+    await waitForSettingsSave(page);
+    await page.waitForFunction(() => document.querySelector('.background-layer.is-active').style.backgroundImage.includes('blob:'));
+    await page.locator('#bgApplyBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    const original = await backgroundFrame(page);
+    const originalUrl = original.image.match(/url\(["']?(blob:[^"')]+)/)[1];
+    await openSettings(page);
+    await page.locator('#bgModeSelect').selectOption('solid');
+    await page.locator('#bgSolidColorHex').fill('#334455');
+    await waitForSettingsSave(page);
+    assert.equal(await page.evaluate(url => window.backgroundRevokedUrls.includes(url), originalUrl), false);
+    await page.locator('#bgCancelBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    assert.deepEqual(await backgroundFrame(page), original);
+    assert.equal(await page.evaluate(url => window.backgroundRevokedUrls.includes(url), originalUrl), false);
+    await openSettings(page);
+    await page.locator('#bgModeSelect').selectOption('gradient');
+    await waitForSettingsSave(page);
+    await page.locator('#bgApplyBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    assert.equal(await page.evaluate(url => window.backgroundRevokedUrls.includes(url), originalUrl), true);
+});
+
+test('取消和切换模式会丢弃迟到的壁纸加载，保存只采用最后的预览', async t => {
+    const { page } = await openPage(t);
+    const file = await wallpaperFixture(page);
+    let imageSequence = 0;
+    let acceptRequest;
+    const blockers = [];
+    await page.route('https://www.bing.com/HPImageArchive.aspx?*', route => route.fulfill({
+        contentType: 'application/json', headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify({ images: [{ url: `https://www.bing.com/settings-preview-${++imageSequence}.png` }] })
+    }));
+    await page.route(/https:\/\/www\.bing\.com\/settings-preview-\d+\.png/, async route => {
+        let release;
+        let complete;
+        const gate = new Promise(resolve => { release = resolve; });
+        const finished = new Promise(resolve => { complete = resolve; });
+        const blocker = { release, finished };
+        blockers.push(blocker);
+        acceptRequest(blocker);
+        await gate;
+        try { await route.fulfill({ contentType: 'image/png', body: file.buffer }); } catch { /* 请求可能已经取消。 */ }
+        complete();
+    });
+    const requestedImage = () => new Promise(resolve => { acceptRequest = resolve; });
+    try {
+        const original = await backgroundFrame(page);
+        const originalSettings = await storedBackground(page);
+        await openSettings(page);
+        const firstRequest = requestedImage();
+        await page.locator('#bgModeSelect').selectOption('online');
+        const first = await firstRequest;
+        assert.equal(await page.locator('#bgApplyBtn').isDisabled(), true);
+        await page.locator('#bgCancelBtn').click();
+        await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+        first.release();
+        await first.finished;
+        assert.deepEqual(await backgroundFrame(page), original);
+        assert.equal(await storedBackground(page), originalSettings);
+        await openSettings(page);
+        const secondRequest = requestedImage();
+        await page.locator('#bgModeSelect').selectOption('online');
+        const second = await secondRequest;
+        await page.locator('#bgModeSelect').selectOption('gradient');
+        await page.getByRole('button', { name: '夜空', exact: true }).click();
+        await waitForSettingsSave(page);
+        const finalPreview = await backgroundFrame(page);
+        await page.locator('#bgApplyBtn').click();
+        await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+        second.release();
+        await second.finished;
+        assert.deepEqual(await backgroundFrame(page), finalPreview);
+        assert.equal(JSON.parse(await storedBackground(page)).mode, 'gradient');
+    } finally {
+        blockers.forEach(blocker => blocker.release());
+    }
+});
+
+test('预览暂停自动轮播，取消后恢复，纯色模式不会开启图片轮播', async t => {
+    const { page } = await openPage(t);
+    await page.clock.install();
+    await page.evaluate(() => localStorage.setItem('backgroundSettings', JSON.stringify({ mode: 'local', autoRotate: true, rotateIntervalSec: 10 })));
+    await page.reload();
+    await page.waitForFunction(() => window.backgroundRuntimeWrites > 0);
+    await openSettings(page);
+    const initialWrites = await page.evaluate(() => window.backgroundRuntimeWrites);
+    await page.clock.fastForward(30000);
+    assert.equal(await page.evaluate(() => window.backgroundRuntimeWrites), initialWrites);
+    await page.locator('#bgCancelBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    await page.clock.fastForward(11000);
+    await page.waitForFunction(previous => window.backgroundRuntimeWrites > previous, initialWrites);
+    await openSettings(page);
+    await page.locator('#bgModeSelect').selectOption('solid');
+    await waitForSettingsSave(page);
+    await page.locator('#bgApplyBtn').click();
+    await page.locator('#bgSettingsPanel').waitFor({ state: 'hidden' });
+    const savedWrites = await page.evaluate(() => window.backgroundRuntimeWrites);
+    await page.clock.fastForward(30000);
+    assert.equal(await page.evaluate(() => window.backgroundRuntimeWrites), savedWrites);
 });
